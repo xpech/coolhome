@@ -1,0 +1,12 @@
+main:
+ home:
+   name: Maisons
+   url: /
+   perm: none
+   icon: <i class="nav-icon icon-home"></i>
+   class: main-menu-accueil
+ devices:
+   name: Satellites
+   url: /statellites
+   icon: <i class="nav-icon fa fa-address-book"></i>
+   class: main-menu-annuaire

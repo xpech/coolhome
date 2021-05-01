@@ -1,0 +1,10 @@
+RewriteEngine On
+ RewriteBase /  
+
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond $1 !^(index\.php|images|robots\.txt|css|docs|js|system)
+  RewriteRule ^(.*)$ /index.php?/$1 [L]
+
+
+php_value short_open_tag on
