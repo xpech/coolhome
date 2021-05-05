@@ -1,7 +1,7 @@
-username: contact@coolhome.ovh
-password: contact//MAIL??SMTP
-host: ssl0.ovh.net
-from: contact@coolhome.ovh
+username: ***
+password: ****
+host: _****
+from: _****
 from_name: Contact CoolHome
 port: 587
 
