@@ -1,5 +1,5 @@
 /*
-   SWEETHOME Project
+   COOLHOME Project
 
    Gestion des satellites
     capteur
@@ -10,7 +10,7 @@
    Xavier Pechoultres
 
 */
-#define SW_VERSION 7
+#define SW_VERSION 8
 
 #if defined(ESP8266)
 #define SW_PLATFORM "ESP8266"
@@ -380,6 +380,7 @@ void handleJSON() {
 }
 
 String lastHttpResponse = "";
+String lastHttpRequest = "";
 
 String httpSecure = "";
 /*
@@ -450,7 +451,7 @@ void handleSetup()
     html.concat("<input type=\"submit\" name=\"saveconf\" class=\"btn btn-success\" value=\"Connecter\"></div></div>");
   }
   html.concat(cardBegin("CoolHome Server"));
-  html.concat("<div class=\"form-group\"><label>SweetHome ID</label><input class=\"form-control\" type=\"text\" name=\"cloudlogin\" value=\"" +  String(myconf.cloudlogin) + "\"></div><br/>"
+  html.concat("<div class=\"form-group\"><label>CoolHome ID (email)</label><input class=\"form-control\" type=\"text\" name=\"cloudlogin\" value=\"" +  String(myconf.cloudlogin) + "\"></div><br/>"
               "<input type=\"submit\" name=\"saveconf\" class=\"btn btn-success\" value=\"Connecter\"></div></div>");
 
   html.concat(cardBegin("Capteurs"));
@@ -458,8 +459,11 @@ void handleSetup()
   html.concat(htmlCheck("DALLAS ?", "dallas", is_sensor(SID_DALLAS)));
   html.concat(htmlCheck("Use pilot for toaster ?", "pilot", is_mode(MODE_PILOT)));
   html.concat(F("<button class=\"btn btn-primary\" type=\"submit\" name=\"saveconf\" value=\"1\">Save</button></div></div></form>"));
-  html.concat(F("<pre>"));
+  html.concat(F("<hr><pre>"));
   html.concat(lastHttpResponse);
+  html.concat(F("</pre>"));
+  html.concat(F("<hr><pre>"));
+  html.concat(lastHttpRequest);
   html.concat(F("</pre>"));
   html.concat(htmlFoot());
   server.send(200, "text/html", html.c_str());
@@ -479,7 +483,7 @@ String htmlCheck(String title, String name, bool state)
 String htmlNav()
 {
   return "<nav class=\"navbar navbar-dark bg-dark navbar-expand-lg\">"
-         "<a class=\"navbar-brand\" href=\"/\">SweetHome</a>"
+         "<a class=\"navbar-brand\" href=\"/\">CoolHome</a>"
          "<button class=\"navbar-toggler\" type=\"button\""
          " data-toggle=\"collapse\" data-target=\"#navbarSW\" aria-controls=\"navbarSW\""
          " aria-expanded=\"false\" aria-label=\"Toggle navigation\">"
@@ -586,7 +590,7 @@ void handleHome()
 {
   updateDatas();
   Serial.println("handleHome");
-  String html = htmlHead("SweetHome", 0);
+  String html = htmlHead("CoolHome", 0);
   html.concat(F("<div class=\"card\">"
                 "  <div class=\"card-header\">Temperature</div><div class=\"card-body\">"));
   html.concat(temperature);
@@ -643,7 +647,7 @@ void handleHome()
   Program html Form
 */
 void handleProgram() {
-  String html = htmlHead("SweetHome Programation", 0);
+  String html = htmlHead("CoolHome Programation", 0);
   if (server.method() == HTTP_POST)
   {
     if (server.hasArg("reset"))
@@ -892,6 +896,7 @@ void connectWifi()
 {
   /* gestion WIFI */
   WiFi.mode(WIFI_STA);
+  //WiFi.begin("lamouetterieuse2", "MARINE/XAV");
   WiFi.begin(myconf.wifi_ssid, myconf.wifi_pass);
 
   Serial.print("Connecting ");
@@ -945,7 +950,7 @@ void setup()
   // demare la sortie standard
   Serial.begin(9600);
   // Serial.setDebugOutput(true);
-  hostname = "sweethome_sat_";
+  hostname = "coolhome_";
   hostname.concat(ESP.getChipId());
 
   pinMode( RESET_PIN, INPUT);
@@ -1080,6 +1085,7 @@ bool connectService()
 
     }
     serializeJson(request, json);
+    lastHttpRequest = json;
     Serial.println(json);
     int httpCode = http.POST(json);
     if (httpCode == HTTP_CODE_OK)
