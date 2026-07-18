@@ -11,7 +11,7 @@ class Devices extends BaseController
             return $auth;
         }
 
-        $db = App\Class\CDatabase::DB();
+        $db = \App\Class\CDatabase::DB();
         $devices = $db->keyedrows(
             'SELECT d.id,d.uuid,d.title,d.room,d.kind,d.reference,d.owner,r.title AS room_title FROM t_device d LEFT JOIN t_room r ON r.id = d.room WHERE d.owner = %d ORDER BY d.title ASC',
             (int) $auth['id']
@@ -99,7 +99,7 @@ class Devices extends BaseController
     private function isDeviceActive(int $deviceId): bool
     {
         $limit = date('Y-m-d H:i:s', strtotime('-2 hours'));
-        $db = App\Class\CDatabase::DB();
+        $db = \App\Class\CDatabase::DB();
         $cnt = (int) $db->oneValue(
             'SELECT count(*) FROM t_data WHERE device = %d AND created > %s',
             $deviceId,

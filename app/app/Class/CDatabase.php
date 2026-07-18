@@ -46,10 +46,10 @@ class CDatabase
      * Exécuter une requête SQL
      *
      * @param string $query Requête SQL
-     * @param array|null $params Paramètres de liaison
+     * @param array|mixed|null $params Paramètres de liaison
      * @return \PDOStatement|false
      */
-    public function query(string $query, ?array $params = null)    
+    public function query(string $query, ...$params)
     {
         if ($params) {
             $query = vsprintf($query, $params);
@@ -320,7 +320,7 @@ class CDatabase
         if ($stmt === false) {
             return false;
         }
-        $row = $stmt->getRow();
+        $row = $stmt->getRow('array');
         return $row ? $row[0] : false;
     }
 

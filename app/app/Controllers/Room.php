@@ -72,6 +72,46 @@ class Room extends BaseController
         ]);
     }
 
+    public function datachart(int $id)
+    {
+        $auth = $this->requireUser('/room/index/' . $id);
+        if ($auth instanceof \CodeIgniter\HTTP\RedirectResponse) {
+            return $this->response->setStatusCode(403)->setJSON(['error' => 'forbidden']);
+        }
+
+        $db = \App\Class\CDatabase::DB();
+        $rows = $db->keyedRows(
+            'SELECT r.id FROM t_room r JOIN t_home h ON h.id = r.home WHERE r.id = %d AND h.owner = %d LIMIT 1',
+            $id,
+            (int) $auth['id']
+        );
+
+        if (! $rows) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'not_found']);
+        }
+
+        $points = $db->keyedRows(
+            'SELECT created,value FROM t_data WHERE room = %d AND kind = %s ORDER BY created ASC LIMIT 1200',
+            $id,
+            $db->STRING('temp')
+        );
+
+        $series = [];
+        foreach ($points as $p) {
+            $series[] = [
+                'x' => (string) ($p['created'] ?? ''),
+                'y' => isset($p['value']) ? (float) $p['value'] : null,
+            ];
+        }
+
+        return $this->response->setJSON([
+            [
+                'label' => 'Temperature',
+                'data' => $series,
+            ],
+        ]);
+    }
+
     private function savePrograms(int $roomId): void
     {
         $db = \App\Class\CDatabase::DB();
