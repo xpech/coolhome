@@ -2,3 +2,7 @@
 .DS_Store
 /app/writable
 /app/node_modules
+/app_tmp/writable
+/app_tmp/node_modules
+/writable
+/node_modules
