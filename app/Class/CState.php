@@ -14,9 +14,9 @@ namespace App\Class;
 
 
 //-----------------------------------------------------------------------------
-//					CLASSE  CUtilisateur
+//					CLASSE  CState
 //-----------------------------------------------------------------------------
-class CUSer extends CDbObject
+class CState extends CDbObject
 {
 //-----------------------------------------------------------------------------
 //					VARIABLES MEMBRES
