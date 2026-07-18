@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @source "../app/Views/**/*.php";
-@source "../application/views/**/*.php";
 
 :root {
 	--ch-ink: #0f172a;
