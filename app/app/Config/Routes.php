@@ -31,3 +31,7 @@ $routes->get('devices/dl/(:any)/(:any)', 'Devices::dl/$1/$2');
 $routes->match(['GET', 'POST'], 'device/index/(:num)', 'Device::index/$1');
 $routes->post('device/datasfordt/(:num)', 'Device::datasfordt/$1');
 $routes->get('device/datachart/(:num)', 'Device::datachart/$1');
+
+
+$routes->match(['GET', 'POST'], 'api', 'Api::index');
+$routes->match(['GET', 'POST'], 'api/(:num)', 'Api::index/$1');

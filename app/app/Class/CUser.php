@@ -52,7 +52,8 @@ class CUSer extends CDbObject
 
 	static public function withEmail($email)
 	{
-		$x = self::query('SELECT * FROM t_user WHERE email = %s',CDatabase::DB()->STRING($email));
+		$x = self::query('SELECT * FROM t_user WHERE email = %s',
+			CDatabase::DB()->STRING($email));
 		return array_pop($x);
 	}
 
@@ -152,10 +153,9 @@ class CUSer extends CDbObject
 	}
 	function setPassword($new_password)
 	{
-		$query = sprintf("UPDATE t_user set `password` = %s WHERE id = %d ",
+		$c = sprintf("UPDATE t_user set `password` = %s WHERE id = %d ",
 					CDatabase::DB()->PASSWORD($new_password), $this->id);
-		echo $query;		
-		return CDatabase::DB()->query($query);
+		return CDatabase::DB()->query($c);
 	}
 			
 	function email() { return $this->email; }

@@ -15,22 +15,20 @@ class CDbObject {
 		return array();
 	}
 
-	static function query()
+	static function query($query, ...$params)
 	{
 		$DB = CDatabase::DB();
-		$query="";
-		if (func_num_args() > 1)
+		if ($params)
 		{
-			$args = func_get_args();
-			$fmt = array_shift($args); 
-			$query = vsprintf($fmt,$args);
-		} else $query=func_get_arg(0);
+			$query = vsprintf($query,$params);
+		}
 
 		$res = array();
 		$rs = $DB->query($query);
 		if($rs)
 		{
-			while($tmp = $DB->getRow($rs))
+
+			while($tmp = $rs->getUnbufferedRow('array'))
 			{
 				$x = static::objectWithArray($tmp);
 				$res[] = $x;
@@ -310,7 +308,7 @@ class CDbObject {
 		$query = sprintf("INSERT INTO %s (%s) values (%s)",$table,$fields_string,$values_string);
 		if ($rs = $DB->query($query))
 		{
-			$this->id = $DB->getLastID();
+			$this->id = $DB->getLastInsertId();
 			$this->postCreate();
 			//CUserLog::trace($table,$this->id,'CREATE',$info);
 			return true;

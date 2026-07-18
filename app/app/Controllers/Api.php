@@ -1,16 +1,23 @@
 <?php
-defined('BASEPATH') OR exit('No direct script access allowed');
+namespace App\Controllers;
+use CodeIgniter\API\ResponseTrait;
+use App\Class\CDebug;
+use App\Class\CUser;
+use App\Class\CDevice;
+use App\Class\CData;
+use App\Class\CDatabase;
 
+class Api extends BaseController {
+    use ResponseTrait;
 
-class Api extends CoolHomeController {
 	var $acl = false;
 	/**
 	 * Index Page for this controller.
 	 *
 	 * Maps to the following URL
-	 * 		http://example.com/index.php/welcome
+	 * 		http://example.com/index.php/api
 	 *	- or -
-	 * 		http://example.com/index.php/welcome/index
+	 * 		http://example.com/index.php/api/index
 	 *	- or -
 	 * Since this controller is set as the default controller in
 	 * config/routes.php, it's displayed at http://example.com/
@@ -55,28 +62,60 @@ class Api extends CoolHomeController {
 						}
 					}
 					$heater = false;
+					$duration = 0;
 					if ($x->kind == "HEATER")
 					{
 
 						if ($room = $x->room())
 						{
 							$heater = ($room->temp() < $room->target());
-							CDebug::log("Radiateur " .$room->info() . " :  ".$heater);
+							CDebug::log("Radiateur " .$room->info() . " :  ".(int)$heater);
 						}
 
+					} else if ($x->kind == "FAN")
+					{
+						if ($room = $x->room())
+						{
+							$heater = ($room->hum() > $room->target('FAN'));
+							CDebug::log("Fan " .$room->info() . " :  ".$heater);
+						}
+					} else if ($x->kind == "WATERING")
+					{
+						if ($room = $x->room())
+						{
+							$home = $room->home();
+							$precipitation = $home->precipitations();
+
+							if (false && $precipitation > 5 )
+							{
+								CDebug::log("precipitation : not watering");
+								$heater  = false;
+								$duration = 0;
+							} else if ($p = $room->program('WATERING'))
+							{
+								$heater = $p->watering();
+								$duration = ($heater ? $p->watering_duration() : 0);
+							} else
+							{
+								CDebug::log('no watering program');
+								$duration = 0;
+								$heater = 0;
+							}
+							CDebug::log('MODE WATERING '.(int)$heater.' duration = '.$duration);
+						}
 					}
-					return $this->json([
+					return $this->setResponseFormat('json')->respond([
 						'connected' => true,
 						'datetime' => date('now'),
-						'heater' => $heater
+						'heater' => $heater,
+						'duration' => $duration
 					]);
-					
 				}
-			} else CDebug::log('API : unknown UserId'. $headers['CoolHomeUserId']);
+			} else CDebug::log('API : unknown CoolHomeAccount'. $headers['CoolHomeAccount']);
 		} else {
-			CDebug::log('API : no CoolHomeUserId autodetect ?');
+			CDebug::log('API : no CoolHomeAccount autodetect ?');
 		}
-		return $this->json([
+		return $this->setResponseFormat('json')->respond([
 						'connected' => false,
 						'datetime' => date('now')
 					]);

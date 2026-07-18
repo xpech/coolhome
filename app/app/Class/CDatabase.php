@@ -285,11 +285,12 @@ class CDatabase
     /**
      * Formater une chaîne pour SQL (échappement)
      *
-     * @param string $val Valeur à formater
+     * @param string|null $val Valeur à formater
      * @return string
      */
-    public function STRING(string $val): string
+    public function STRING(?string $val): string
     {
+        if ($val === null) return "null";
         return "'" . $this->escape($val) . "'";
     }
 
@@ -402,6 +403,20 @@ class CDatabase
             $r .= $a;
         }
         return "(" . $r . ")";
+    }
+
+    public function ID($val): string
+    {
+        if ($val === null) return "null";
+        return (string) ((int) $val);
+    }
+    public function INT($val): string
+    {
+        return (string) ((int) $val);
+    }
+    public function FLOAT($val): string
+    {
+        return (string) ((float) $val);
     }
 
 }
