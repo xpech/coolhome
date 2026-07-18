@@ -17,7 +17,7 @@
             <div class="field">
                 <label for="kind" class="ch-label">Type</label>
                 <select id="kind" name="kind" class="ch-input">
-                    <?php foreach (['HEATER' => 'Radiateur', 'LIGHT' => 'Lumiere', 'SWITCH' => 'Interrupteur', 'WATERING' => 'Arrosage', '' => 'Indefini'] as $k => $v): ?>
+                    <?php foreach (['HEATER' => 'Radiateur', 'LIGHT' => 'Lumiere', 'SWITCH' => 'Interrupteur', 'WATERING' => 'Arrosage', 'FAN' => 'Ventilation', '' => 'Indefini'] as $k => $v): ?>
                         <option value="<?= esc($k) ?>" <?= ((string) $device['kind'] === (string) $k) ? 'selected' : '' ?>><?= esc($v) ?></option>
                     <?php endforeach; ?>
                 </select>

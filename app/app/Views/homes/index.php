@@ -36,6 +36,44 @@
                 <div class="text-sm text-gray-500 mt-2">Confort / Absence</div>
                 <div><?= esc((string) $home['confort_temp']) ?>° / <?= esc((string) $home['absence_temp']) ?>°</div>
 
+                <?php if (! empty($supportsLocation)): ?>
+                    <div class="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+                        <div class="text-gray-500">Localisation</div>
+                        <div class="font-medium"><?= trim((string) ($home['location'] ?? '')) === '' ? '-' : esc((string) $home['location']) ?></div>
+                        <div class="mt-1 text-gray-500">Precipitation</div>
+                        <div>
+                            <?php if (trim((string) ($home['location'] ?? '')) === ''): ?>
+                                <span class="text-gray-500">Configurer la localisation</span>
+                            <?php elseif ($home['precipitations'] === null): ?>
+                                <span class="text-amber-700">Meteo indisponible</span>
+                            <?php else: ?>
+                                <?= esc(number_format((float) $home['precipitations'], 1)) ?> mm
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <div class="mt-3 rounded-xl border border-gray-200 bg-white px-3 py-2">
+                    <div class="mb-2 text-sm font-semibold text-gray-600">Pieces (apercu)</div>
+                    <?php $preview = $home['rooms_preview'] ?? []; ?>
+                    <?php if ($preview === []): ?>
+                        <div class="text-sm text-gray-500">Aucune piece</div>
+                    <?php else: ?>
+                        <div class="space-y-1.5">
+                            <?php foreach ($preview as $room): ?>
+                                <div class="flex items-center justify-between gap-2 text-sm">
+                                    <div class="truncate font-medium text-gray-700"><?= esc((string) ($room['title'] ?? 'Piece')) ?></div>
+                                    <div class="whitespace-nowrap text-gray-600">
+                                        C <?= $room['target'] === null ? '-' : esc(number_format((float) $room['target'], 1)) ?>°
+                                        · T <?= $room['temp'] === null ? '-' : esc(number_format((float) $room['temp'], 1)) ?>°
+                                        · Hr <?= $room['hr'] === null ? '-' : esc(number_format((float) $room['hr'], 0)) ?>%
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
                 <div class="mt-3 flex gap-2 flex-wrap">
                     <a class="ch-btn ch-btn-neutral" href="/home/index/<?= (int) $home['id'] ?>">Details</a>
                 </div>

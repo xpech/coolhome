@@ -12,6 +12,8 @@ class Room extends BaseController
         }
 
         $db = \App\Class\CDatabase::DB();
+        $supportsRoomAppearance = $this->hasColumn('t_room', 'icon') && $this->hasColumn('t_room', 'color');
+        $supportsProgramKind = $this->hasColumn('t_room_program', 'kind');
         $rows = $db->keyedrows(
             'SELECT r.id,r.home,r.title,r.mode,h.owner,h.title AS home_title,h.confort_temp,h.absence_temp FROM t_room r JOIN t_home h ON h.id = r.home WHERE r.id = %d AND h.owner = %d LIMIT 1',
             $id,
@@ -21,6 +23,15 @@ class Room extends BaseController
 
         if (! $room) {
             return redirect()->to('/homes');
+        }
+
+        if ($supportsRoomAppearance) {
+            $extra = $db->keyedrows('SELECT icon,color FROM t_room WHERE id = %d LIMIT 1', $id);
+            $room['icon'] = (string) ($extra[0]['icon'] ?? '');
+            $room['color'] = (string) ($extra[0]['color'] ?? '');
+        } else {
+            $room['icon'] = '';
+            $room['color'] = '';
         }
 
         $action = (string) ($this->request->getPost('action') ?? '');
@@ -34,18 +45,29 @@ class Room extends BaseController
             }
 
             if ($action === 'UpdateRoom') {
-                $db->query(
-                    'UPDATE t_room SET title = %s, mode = %d WHERE id = %d',
-                    $db->STRING(trim((string) $this->request->getPost('title'))),
-                    (int) $this->request->getPost('mode'),
-                    $id
-                );
+                if ($supportsRoomAppearance) {
+                    $db->query(
+                        'UPDATE t_room SET title = %s, mode = %d, icon = %s, color = %s WHERE id = %d',
+                        $db->STRING(trim((string) $this->request->getPost('title'))),
+                        (int) $this->request->getPost('mode'),
+                        $db->STRING(trim((string) $this->request->getPost('icon'))),
+                        $db->STRING(trim((string) $this->request->getPost('color'))),
+                        $id
+                    );
+                } else {
+                    $db->query(
+                        'UPDATE t_room SET title = %s, mode = %d WHERE id = %d',
+                        $db->STRING(trim((string) $this->request->getPost('title'))),
+                        (int) $this->request->getPost('mode'),
+                        $id
+                    );
+                }
 
                 return redirect()->to('/room/index/' . $id);
             }
 
-            if ($action === 'UpdateProgram' || $action === 'AddProgram') {
-                $this->savePrograms($id);
+            if (in_array($action, ['UpdateProgram', 'AddProgram', 'AddProgramHeater', 'AddProgramFan', 'AddProgramWatering'], true)) {
+                $this->savePrograms($id, $action, $supportsProgramKind);
                 return redirect()->to('/room/index/' . $id);
             }
         }
@@ -55,10 +77,38 @@ class Room extends BaseController
             $id
         );
 
-        $programs = $db->keyedrows(
-            'SELECT id,weekday,start,temp FROM t_room_program WHERE room = %d ORDER BY start ASC',
-            $id
-        );
+        if ($supportsProgramKind) {
+            $programs = $db->keyedrows(
+                'SELECT id,weekday,start,temp,kind FROM t_room_program WHERE room = %d ORDER BY kind ASC, start ASC',
+                $id
+            );
+        } else {
+            $programs = $db->keyedrows(
+                'SELECT id,weekday,start,temp,%s AS kind FROM t_room_program WHERE room = %d ORDER BY start ASC',
+                $db->STRING('HEATER'),
+                $id
+            );
+        }
+
+        $hasHeater = false;
+        $hasFan = false;
+        $hasWatering = false;
+        foreach ($devices as $dev) {
+            $k = (string) ($dev['kind'] ?? '');
+            if ($k === 'HEATER') {
+                $hasHeater = true;
+            }
+            if ($k === 'FAN') {
+                $hasFan = true;
+            }
+            if ($k === 'WATERING') {
+                $hasWatering = true;
+            }
+        }
+
+        if (! $hasHeater && ! $hasFan && ! $hasWatering) {
+            $hasHeater = true;
+        }
 
         $temp = $this->roomLatestTemp($id);
         $target = $this->roomTarget($room, $id);
@@ -69,6 +119,13 @@ class Room extends BaseController
             'programs' => $programs,
             'temp' => $temp,
             'target' => $target,
+            'supportsRoomAppearance' => $supportsRoomAppearance,
+            'supportsProgramKind' => $supportsProgramKind,
+            'hasHeater' => $hasHeater,
+            'hasFan' => $hasFan,
+            'hasWatering' => $hasWatering,
+            'iconOptions' => $supportsRoomAppearance ? $this->loadChoiceList('icons.yml') : [],
+            'colorOptions' => $supportsRoomAppearance ? $this->loadChoiceList('colors.yml') : [],
         ]);
     }
 
@@ -112,14 +169,19 @@ class Room extends BaseController
         ]);
     }
 
-    private function savePrograms(int $roomId): void
+    private function savePrograms(int $roomId, string $action, bool $supportsProgramKind): void
     {
         $db = \App\Class\CDatabase::DB();
-        $existing = $db->keyedrows('SELECT id FROM t_room_program WHERE room = %d', $roomId);
+        if ($supportsProgramKind) {
+            $existing = $db->keyedrows('SELECT id,kind FROM t_room_program WHERE room = %d', $roomId);
+        } else {
+            $existing = $db->keyedrows('SELECT id FROM t_room_program WHERE room = %d', $roomId);
+        }
 
         $starts = $this->request->getPost('p_start') ?? [];
         $days = $this->request->getPost('p_weekday') ?? [];
         $temps = $this->request->getPost('p_temp') ?? [];
+        $kinds = $this->request->getPost('p_kind') ?? [];
 
         foreach ($existing as $row) {
             $programId = (int) $row['id'];
@@ -128,27 +190,122 @@ class Room extends BaseController
                 continue;
             }
 
-            $db->query(
-                'UPDATE t_room_program SET start = %s, weekday = %d, temp = %f WHERE id = %d',
-                $db->STRING((string) $starts[$programId]),
-                $this->weekdayMask($days[$programId] ?? []),
-                (float) ($temps[$programId] ?? 0),
-                $programId
-            );
-        }
+            if ($supportsProgramKind) {
+                $kind = trim((string) ($kinds[$programId] ?? ($row['kind'] ?? 'HEATER')));
+                if (! in_array($kind, ['HEATER', 'FAN', 'WATERING'], true)) {
+                    $kind = 'HEATER';
+                }
 
-        if ((string) ($this->request->getPost('action') ?? '') === 'AddProgram') {
-            $newStart = trim((string) $this->request->getPost('new_start'));
-            if ($newStart !== '') {
                 $db->query(
-                    'INSERT INTO t_room_program (room,start,weekday,temp) VALUES (%d,%s,%d,%f)',
-                    $roomId,
-                    $db->STRING($newStart),
-                    $this->weekdayMask($this->request->getPost('new_weekday') ?? []),
-                    (float) $this->request->getPost('new_temp')
+                    'UPDATE t_room_program SET start = %s, weekday = %d, temp = %f, kind = %s WHERE id = %d',
+                    $db->STRING((string) $starts[$programId]),
+                    $this->weekdayMask($days[$programId] ?? []),
+                    (float) ($temps[$programId] ?? 0),
+                    $db->STRING($kind),
+                    $programId
+                );
+            } else {
+                $db->query(
+                    'UPDATE t_room_program SET start = %s, weekday = %d, temp = %f WHERE id = %d',
+                    $db->STRING((string) $starts[$programId]),
+                    $this->weekdayMask($days[$programId] ?? []),
+                    (float) ($temps[$programId] ?? 0),
+                    $programId
                 );
             }
         }
+
+        $prefix = 'new';
+        $kindForInsert = 'HEATER';
+        if ($action === 'AddProgramFan') {
+            $prefix = 'newfan';
+            $kindForInsert = 'FAN';
+        } elseif ($action === 'AddProgramWatering') {
+            $prefix = 'new_watering';
+            $kindForInsert = 'WATERING';
+        }
+
+        if (in_array($action, ['AddProgram', 'AddProgramHeater', 'AddProgramFan', 'AddProgramWatering'], true)) {
+            $newStart = trim((string) $this->request->getPost($prefix . '_start'));
+            if ($newStart !== '') {
+                $weekday = $this->weekdayMask($this->request->getPost($prefix . '_weekday') ?? []);
+                $temp = (float) $this->request->getPost($prefix . '_temp');
+
+                if ($supportsProgramKind) {
+                    $db->query(
+                        'INSERT INTO t_room_program (room,start,weekday,temp,kind) VALUES (%d,%s,%d,%f,%s)',
+                        $roomId,
+                        $db->STRING($newStart),
+                        $weekday,
+                        $temp,
+                        $db->STRING($kindForInsert)
+                    );
+                } else {
+                    $db->query(
+                        'INSERT INTO t_room_program (room,start,weekday,temp) VALUES (%d,%s,%d,%f)',
+                        $roomId,
+                        $db->STRING($newStart),
+                        $weekday,
+                        $temp
+                    );
+                }
+            }
+        }
+    }
+
+    private function hasColumn(string $table, string $column): bool
+    {
+        $safeTable = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+        if ($safeTable === '') {
+            return false;
+        }
+
+        $db = \App\Class\CDatabase::DB();
+        $rows = $db->keyedrows(
+            "SHOW COLUMNS FROM `{$safeTable}` LIKE %s",
+            $db->STRING($column)
+        );
+
+        return ! empty($rows);
+    }
+
+    private function loadChoiceList(string $filename): array
+    {
+        $path = ROOTPATH . 'application/config/' . $filename;
+        if (! is_file($path)) {
+            return [];
+        }
+
+        $items = [];
+        $current = [];
+        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+        foreach ($lines as $line) {
+            $trim = trim($line);
+            if ($trim === '' || str_starts_with($trim, '#')) {
+                continue;
+            }
+
+            if (str_starts_with($trim, '- ')) {
+                if ($current !== [] && isset($current['name'], $current['css'])) {
+                    $items[] = $current;
+                }
+                $current = [];
+                $trim = trim(substr($trim, 1));
+            }
+
+            $parts = explode(':', $trim, 2);
+            if (count($parts) === 2) {
+                $key = trim($parts[0]);
+                $value = trim($parts[1]);
+                $current[$key] = trim($value, " \t\n\r\0\x0B\"'");
+            }
+        }
+
+        if ($current !== [] && isset($current['name'], $current['css'])) {
+            $items[] = $current;
+        }
+
+        return $items;
     }
 
     private function weekdayMask(array $days): int

@@ -39,8 +39,34 @@ class Login extends BaseController
 
     public function recover()
     {
+        $message = null;
+        $error = null;
+
+        if ($this->request->getMethod(true) === 'POST' && $this->request->getPost('action') === 'recovermail') {
+            $email = trim((string) $this->request->getPost('email'));
+
+            if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $error = 'Email non valide.';
+            } else {
+                $db = CDatabase::DB();
+                $rows = $db->keyedrows(
+                    'SELECT id,email FROM t_user WHERE email = %s LIMIT 1',
+                    $db->STRING($email)
+                );
+
+                if ($rows) {
+                    $this->sendPasswordRecoverMail($email);
+                }
+
+                // Message neutre pour ne pas divulguer l'existence d'un compte.
+                $message = 'Si le compte existe, un email de reinitialisation a ete envoye.';
+            }
+        }
+
         return view('login/recover', [
-            'message' => 'La reinitialisation sera branchee apres migration complete des notifications.',
+            'message' => $message,
+            'error' => $error,
+            'email' => (string) $this->request->getPost('email'),
         ]);
     }
 
@@ -209,6 +235,42 @@ class Login extends BaseController
             return $mail->send();
         } catch (\Throwable $e) {
             log_message('error', 'Login create mail error: {message}', ['message' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    private function sendPasswordRecoverMail(string $email): bool
+    {
+        $config = $this->loadLegacyMailConfig();
+        if ($config === []) {
+            return false;
+        }
+
+        $mail = new PHPMailer(true);
+        $mail->isSMTP();
+        $mail->CharSet = 'UTF-8';
+        $mail->Host = (string) ($config['host'] ?? 'localhost');
+        $mail->Port = (int) ($config['port'] ?? 587);
+        $mail->SMTPAuth = true;
+        $mail->Username = (string) ($config['username'] ?? '');
+        $mail->Password = (string) ($config['password'] ?? '');
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+
+        $from = (string) ($config['from'] ?? $mail->Username);
+        $fromName = (string) ($config['from_name'] ?? 'CoolHome');
+
+        $mail->setFrom($from, $fromName);
+        $mail->addAddress($email);
+        $mail->Subject = '[CoolHome] Reinitialisation du mot de passe';
+        $mail->Body = sprintf(
+            "Bonjour,\nVeuillez cliquer sur le lien suivant pour definir un nouveau mot de passe :\n%s\nL'equipe CoolHome",
+            site_url('login/setPassword/' . rawurlencode($email) . '/' . $this->emailKey($email)),
+        );
+
+        try {
+            return $mail->send();
+        } catch (\Throwable $e) {
+            log_message('error', 'Login recover mail error: {message}', ['message' => $e->getMessage()]);
             return false;
         }
     }

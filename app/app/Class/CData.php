@@ -82,6 +82,14 @@ class CData extends CDbObject
 
 	}
 
+	static function hrForRoom($id_room,$date=null)
+	{
+		if (!$date) $date = strtotime('now');
+		$query = sprintf("SELECT value from t_data where room = %d AND kind='hr' and created < '%s' order by created desc limit 1 ",
+			$id_room ,date('Y-m-d H:i:s',$date));
+		return (float)CDatabase::DB()->oneValue($query);
+	}
+
 	static function countForDeviceSince($id_device,$date)
 	{
 		return CDatabase::DB()->oneValue("SELECT count(*) FROM t_data WHERE device = %d AND created > %s",

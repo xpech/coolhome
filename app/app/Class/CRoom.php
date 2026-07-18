@@ -26,6 +26,8 @@ class CRoom extends CDbObject
 	var $id;
 	var $home;
 	var $title;
+	var $color;
+	var $icon;
 	var $mode;
 
 	public static $dbOrderBy = "title";
@@ -43,6 +45,8 @@ class CRoom extends CDbObject
 			'id' => "AUTO",
  			'home' => 'ID',
  			'title' => 'STRING',
+			'color' => 'STRING',
+			'icon' => 'STRING',
  			'mode' => 'INT');
 	}
 
@@ -84,9 +88,9 @@ class CRoom extends CDbObject
 	{
 		return CDevice::forRoom($this->id);
 	}
-	public function programs()
+	public function programs($kind = 'HEATER')
 	{
-		return CRoomProgram::forRoom($this->id);
+		return CRoomProgram::forRoom($this->id, $kind);
 	}
 	public function home()
 	{
@@ -99,18 +103,20 @@ class CRoom extends CDbObject
 		if ($this->mode > 0) return "Confort";
 		return '?';
 	}
-	public function target()
+	public function target($kind = 'HEATER')
 	{
-		if ($this->mode < 0)
-		{
-			$h = $this->home();
-			return $h->absence_temp;
-		} elseif ($this->mode > 0)
-		{
-			$h = $this->home();
-			return $h->confort_temp;
+		if ($kind == 'HEATER') {
+			if ($this->mode < 0)
+			{
+				$h = $this->home();
+				return $h->absence_temp;
+			} elseif ($this->mode > 0)
+			{
+				$h = $this->home();
+				return $h->confort_temp;
+			}
 		}
-		return CRoomProgram::targetForRoom($this->id);
+		return CRoomProgram::targetForRoom($this->id, null, $kind);
 	}
 	public function temp()
 	{
@@ -118,7 +124,11 @@ class CRoom extends CDbObject
 	}
 	public function hum()
 	{
-		return null;
+		return CData::hrForRoom($this->id);
+	}
+	public function program($kind,$date=null)
+	{
+		return CRoomProgram::currentForRoom($this->id,$date,$kind);
 	}
 
 }

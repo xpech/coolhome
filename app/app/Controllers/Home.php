@@ -12,6 +12,8 @@ class Home extends BaseController
         }
 
         $db = \App\Class\CDatabase::DB();
+        $supportsLocation = $this->hasColumn('t_home', 'location');
+        $supportsRoomAppearance = $this->hasColumn('t_room', 'icon') && $this->hasColumn('t_room', 'color');
         $rows = $db->keyedrows(
             'SELECT id,owner,title,mode,confort_temp,absence_temp FROM t_home WHERE id = %d AND owner = %d LIMIT 1',
             $id,
@@ -21,6 +23,13 @@ class Home extends BaseController
 
         if (! $home) {
             return redirect()->to('/homes');
+        }
+
+        if ($supportsLocation) {
+            $locationRow = $db->keyedrows('SELECT location FROM t_home WHERE id = %d LIMIT 1', $id);
+            $home['location'] = (string) ($locationRow[0]['location'] ?? '');
+        } else {
+            $home['location'] = '';
         }
 
         if ($this->request->getMethod(true) === 'POST' && $this->request->getPost('action') === 'UpdateHomeMode') {
@@ -37,31 +46,72 @@ class Home extends BaseController
         }
 
         if ($this->request->getMethod(true) === 'POST' && $this->request->getPost('action') === 'UpdateHome') {
-            $db->query(
-                'UPDATE t_home SET title = %s, confort_temp = %f, absence_temp = %f, mode = %d WHERE id = %d',
-                $db->STRING(trim((string) $this->request->getPost('title'))),
-                (float) $this->request->getPost('confort_temp'),
-                (float) $this->request->getPost('absence_temp'),
-                (int) $this->request->getPost('mode'),
-                $id
-            );
+            if ($supportsLocation) {
+                $db->query(
+                    'UPDATE t_home SET title = %s, confort_temp = %f, absence_temp = %f, location = %s, mode = %d WHERE id = %d',
+                    $db->STRING(trim((string) $this->request->getPost('title'))),
+                    (float) $this->request->getPost('confort_temp'),
+                    (float) $this->request->getPost('absence_temp'),
+                    $db->STRING(trim((string) $this->request->getPost('location'))),
+                    (int) $this->request->getPost('mode'),
+                    $id
+                );
+            } else {
+                $db->query(
+                    'UPDATE t_home SET title = %s, confort_temp = %f, absence_temp = %f, mode = %d WHERE id = %d',
+                    $db->STRING(trim((string) $this->request->getPost('title'))),
+                    (float) $this->request->getPost('confort_temp'),
+                    (float) $this->request->getPost('absence_temp'),
+                    (int) $this->request->getPost('mode'),
+                    $id
+                );
+            }
 
             return redirect()->to('/home/index/' . $id);
         }
 
-        $rooms = $db->keyedrows(
-            'SELECT id,title,mode FROM t_room WHERE home = %d ORDER BY title ASC',
-            $id
-        );
+        $precipitations = null;
+        if ($supportsLocation && trim((string) ($home['location'] ?? '')) !== '') {
+            try {
+                $homeObj = \App\Class\CHome::objectWithId($id);
+                if ($homeObj) {
+                    $p = $homeObj->precipitations();
+                    if (is_numeric($p) && (float) $p >= 0) {
+                        $precipitations = (float) $p;
+                    }
+                }
+            } catch (\Throwable) {
+                $precipitations = null;
+            }
+        }
+
+        if ($supportsRoomAppearance) {
+            $rooms = $db->keyedrows(
+                'SELECT id,title,mode,icon,color FROM t_room WHERE home = %d ORDER BY title ASC',
+                $id
+            );
+        } else {
+            $rooms = $db->keyedrows(
+                'SELECT id,title,mode FROM t_room WHERE home = %d ORDER BY title ASC',
+                $id
+            );
+        }
 
         foreach ($rooms as &$room) {
             $room['target'] = $this->roomTarget((int) $room['id'], (int) $room['mode'], $home);
             $room['temp'] = $this->roomLatestTemp((int) $room['id']);
+            if (! $supportsRoomAppearance) {
+                $room['icon'] = '';
+                $room['color'] = '';
+            }
         }
 
         return view('home/index', [
             'home' => $home,
             'rooms' => $rooms,
+            'supportsLocation' => $supportsLocation,
+            'precipitations' => $precipitations,
+            'supportsRoomAppearance' => $supportsRoomAppearance,
         ]);
     }
 
@@ -245,5 +295,21 @@ class Home extends BaseController
         );
 
         return $row ? (float) $row[0]['temp'] : null;
+    }
+
+    private function hasColumn(string $table, string $column): bool
+    {
+        $safeTable = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+        if ($safeTable === '') {
+            return false;
+        }
+
+        $db = \App\Class\CDatabase::DB();
+        $rows = $db->keyedrows(
+            "SHOW COLUMNS FROM `{$safeTable}` LIKE %s",
+            $db->STRING($column)
+        );
+
+        return ! empty($rows);
     }
 }

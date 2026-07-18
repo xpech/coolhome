@@ -27,6 +27,7 @@ class CHome extends CDbObject
 	var $mode;
 	var $confort_temp;
 	var $absence_temp;
+	var $location;
 		
 	public static $dbOrderBy = "title";
 //-----------------------------------------------------------------------------
@@ -44,6 +45,7 @@ class CHome extends CDbObject
 			'owner' => 'ID',
 			'title' => 'STRING',
 			'mode' => 'INT',
+			'location' => 'STRING',
 			'confort_temp' => 'FLOAT',
 			'absence_temp' => 'FLOAT');
 	}
@@ -95,5 +97,71 @@ class CHome extends CDbObject
 			case 1: return 'Confort';
 		}
 		return '?';
+	}
+
+	function meteo()
+	{
+		if (! $this->location) {
+			return null;
+		}
+
+		$cacheDir = WRITEPATH . 'cache/';
+		if (! is_dir($cacheDir)) {
+			@mkdir($cacheDir, 0775, true);
+		}
+
+		$cache = $cacheDir . 'meteo_' . (int) $this->id . '.json';
+		if (is_file($cache)) {
+			$datas = json_decode((string) file_get_contents($cache));
+			if (
+				isset($datas->days[0]->datetime)
+				&& (string) $datas->days[0]->datetime === date('Y-m-d')
+			) {
+				return $datas;
+			}
+		}
+
+		$apiKey = (string) (getenv('VISUALCROSSING_API_KEY') ?: 'HXDZBPETK643GNXFW2S8JE9TP');
+		$url = 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/'
+			. urlencode((string) $this->location)
+			. '?unitGroup=metric&key=' . urlencode($apiKey)
+			. '&contentType=json';
+
+		if (! function_exists('curl_init')) {
+			return null;
+		}
+
+		$curl = curl_init();
+		curl_setopt_array($curl, [
+			CURLOPT_URL => $url,
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_ENCODING => '',
+			CURLOPT_MAXREDIRS => 10,
+			CURLOPT_TIMEOUT => 10,
+			CURLOPT_FOLLOWLOCATION => true,
+			CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+			CURLOPT_CUSTOMREQUEST => 'GET',
+		]);
+		$response = curl_exec($curl);
+		$ok = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+		curl_close($curl);
+
+		if (! is_string($response) || $response === '' || (int) $ok < 200 || (int) $ok >= 300) {
+			return null;
+		}
+
+		@file_put_contents($cache, $response);
+		return json_decode($response);
+	}
+
+	public function precipitations($value = '')
+	{
+		if ($meteo = $this->meteo()) {
+			if (isset($meteo->days[0]->precip)) {
+				return (float) $meteo->days[0]->precip;
+			}
+		}
+
+		return -1;
 	}
 }

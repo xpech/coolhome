@@ -40,6 +40,21 @@
                     <?php endforeach; ?>
                 </select>
             </div>
+            <?php if (! empty($supportsLocation)): ?>
+                <div class="field">
+                    <label for="location" class="ch-label">Localisation (ville,pays)</label>
+                    <input id="location" type="text" name="location" value="<?= esc((string) ($home['location'] ?? '')) ?>" class="ch-input" placeholder="Paris,France">
+                </div>
+                <div class="field">
+                    <label class="ch-label">Precipitation</label>
+                    <input type="text" class="ch-input" readonly value="<?= $precipitations === null ? '-' : esc(number_format((float) $precipitations, 1)) . ' mm' ?>">
+                    <?php if (trim((string) ($home['location'] ?? '')) === ''): ?>
+                        <p class="mt-1 text-xs text-gray-500">Renseignez une localisation pour activer la meteo.</p>
+                    <?php elseif ($precipitations === null): ?>
+                        <p class="mt-1 text-xs text-amber-700">Meteo indisponible pour le moment, reessayez plus tard.</p>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
         </div>
         <div class="mt-4 flex gap-2.5">
             <button class="ch-btn ch-btn-primary" type="submit" name="action" value="UpdateHome">Enregistrer</button>
@@ -72,6 +87,7 @@
             <thead>
                 <tr>
                     <th>Nom</th>
+                    <?php if (! empty($supportsRoomAppearance)): ?><th>Style</th><?php endif; ?>
                     <th>Mode</th>
                     <th>Consigne</th>
                     <th>Temperature</th>
@@ -81,6 +97,25 @@
                 <?php foreach ($rooms as $room): ?>
                     <tr>
                         <td><a href="/room/index/<?= (int) $room['id'] ?>" class="text-blue-600 hover:text-blue-800"><?= esc($room['title']) ?></a></td>
+                        <?php if (! empty($supportsRoomAppearance)): ?>
+                            <td>
+                                <?php
+                                    $colorMap = [
+                                        'primary' => '#2563eb',
+                                        'success' => '#16a34a',
+                                        'danger' => '#dc2626',
+                                        'secondary' => '#64748b',
+                                        'warning' => '#f59e0b',
+                                    ];
+                                    $roomColor = strtolower(trim((string) ($room['color'] ?? '')));
+                                    $dotColor = $colorMap[$roomColor] ?? '#cbd5e1';
+                                ?>
+                                <div class="flex items-center gap-2 text-sm text-gray-600">
+                                    <span class="inline-block h-3 w-3 rounded-full" style="background: <?= esc($dotColor) ?>"></span>
+                                    <span><?= esc((string) ($room['icon'] ?? '') !== '' ? (string) $room['icon'] : '-') ?></span>
+                                </div>
+                            </td>
+                        <?php endif; ?>
                         <td>
                             <?php
                                 $modes = [-1 => 'Absent', 0 => 'Automatique', 1 => 'Confort'];
