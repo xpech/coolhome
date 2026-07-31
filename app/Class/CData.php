@@ -98,13 +98,8 @@ class CData extends CDbObject
 
 	public static function shouldStore($device_id, $sensor, $kind, $value, $max_age = 3600)
 	{
-		$thresholds = array(
-			'temp' => 0.2,
-			'hr' => 1.0,
-		);
-
-		$normalized_kind = strtolower(trim((string)$kind));
-		if (!isset($thresholds[$normalized_kind]) || !is_numeric($value)) {
+		$threshold = self::retentionThreshold($kind);
+		if ($threshold === null || !is_numeric($value)) {
 			return true;
 		}
 
@@ -125,7 +120,18 @@ class CData extends CDbObject
 			return true;
 		}
 
-		return abs((float)$value - (float)$rows[0]['value']) >= $thresholds[$normalized_kind];
+		return abs((float)$value - (float)$rows[0]['value']) >= $threshold;
+	}
+
+	public static function retentionThreshold($kind)
+	{
+		$thresholds = array(
+			'temp' => 0.2,
+			'hr' => 1.0,
+		);
+
+		$normalized_kind = strtolower(trim((string)$kind));
+		return $thresholds[$normalized_kind] ?? null;
 	}
 
 
