@@ -96,6 +96,38 @@ class CData extends CDbObject
 					$id_device,	CDatabase::DB()->DATETIME($date));
 	}
 
+	public static function shouldStore($device_id, $sensor, $kind, $value, $max_age = 3600)
+	{
+		$thresholds = array(
+			'temp' => 0.2,
+			'hr' => 1.0,
+		);
+
+		$normalized_kind = strtolower(trim((string)$kind));
+		if (!isset($thresholds[$normalized_kind]) || !is_numeric($value)) {
+			return true;
+		}
+
+		$db = CDatabase::DB();
+		$rows = $db->keyedRows(
+			'SELECT created,value FROM t_data WHERE device = %d AND sensor = %s AND kind = %s ORDER BY created DESC LIMIT 1',
+			(int)$device_id,
+			$db->STRING((string)$sensor),
+			$db->STRING((string)$kind)
+		);
+
+		if (!$rows) {
+			return true;
+		}
+
+		$last_created = strtotime((string)$rows[0]['created']);
+		if ($last_created === false || time() - $last_created >= (int)$max_age) {
+			return true;
+		}
+
+		return abs((float)$value - (float)$rows[0]['value']) >= $thresholds[$normalized_kind];
+	}
+
 
 //-----------------------------------------------------------------------------
 //					SERIALISATION DB

@@ -58,7 +58,9 @@ class Api extends BaseController {
 							$d->sensor = $s->name;
 							$d->kind = $s->kind;
 							$d->value = $s->value;
-							$d->create();
+							if (CData::shouldStore($d->device, $d->sensor, $d->kind, $d->value)) {
+								$d->create();
+							}
 						}
 					}
 					$heater = false;
