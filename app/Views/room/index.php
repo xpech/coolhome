@@ -56,6 +56,19 @@
     <div class="ch-card mb-4">
         <h2 class="text-xl font-bold mt-0">Vue graphique</h2>
         <p class="mb-3 text-sm text-gray-500">Evolution de la temperature de la piece.</p>
+        <form id="room-chart-filters" class="mb-3 grid gap-2 sm:grid-cols-[180px,1fr,1fr,auto,auto]">
+            <select id="room-chart-range" class="ch-input">
+                <option value="24h">Dernieres 24h</option>
+                <option value="7d" selected>Derniers 7 jours</option>
+                <option value="30d">Derniers 30 jours</option>
+                <option value="all">Tout l'historique</option>
+                <option value="custom">Personnalise</option>
+            </select>
+            <input id="room-chart-from" type="date" class="ch-input" disabled>
+            <input id="room-chart-to" type="date" class="ch-input" disabled>
+            <button type="submit" class="ch-btn ch-btn-primary">Appliquer</button>
+            <button id="room-chart-reset" type="button" class="ch-btn ch-btn-neutral">Reset</button>
+        </form>
         <canvas id="room-chart" height="110"></canvas>
     </div>
 
@@ -232,29 +245,108 @@
         return;
     }
 
-    const res = await fetch('/room/datachart/<?= (int) $room['id'] ?>');
-    const datasets = await res.json();
-    const normalized = (Array.isArray(datasets) ? datasets : []).map((d) => ({
-        label: d.label,
-        data: d.data,
-        parsing: { xAxisKey: 'x', yAxisKey: 'y' },
-        borderColor: '#0d9488',
-        backgroundColor: '#0d9488',
-        pointRadius: 0,
-        borderWidth: 2,
-        tension: 0.2,
-    }));
+    const rangeEl = document.getElementById('room-chart-range');
+    const fromEl = document.getElementById('room-chart-from');
+    const toEl = document.getElementById('room-chart-to');
+    const filtersEl = document.getElementById('room-chart-filters');
+    const resetEl = document.getElementById('room-chart-reset');
 
-    new Chart(chartEl, {
-        type: 'line',
-        data: { datasets: normalized },
-        options: {
-            responsive: true,
-            scales: {
-                x: { type: 'time', time: { unit: 'day' } },
+    const palette = ['#0d9488', '#2563eb', '#b45309', '#be185d', '#7c3aed', '#16a34a'];
+    let chart = null;
+
+    function syncFilterInputs() {
+        const custom = rangeEl.value === 'custom';
+        fromEl.disabled = !custom;
+        toEl.disabled = !custom;
+        if (!custom) {
+            fromEl.value = '';
+            toEl.value = '';
+        }
+    }
+
+    async function loadChart() {
+        const url = new URL('/room/datachart/<?= (int) $room['id'] ?>', window.location.origin);
+
+        if (rangeEl.value === 'custom') {
+            if (fromEl.value) {
+                url.searchParams.set('from', fromEl.value);
+            }
+            if (toEl.value) {
+                url.searchParams.set('to', toEl.value);
+            }
+            if (!fromEl.value && !toEl.value) {
+                url.searchParams.set('range', '7d');
+            }
+        } else {
+            url.searchParams.set('range', rangeEl.value);
+        }
+
+        const res = await fetch(url.toString());
+        const datasets = await res.json();
+        const normalized = (Array.isArray(datasets) ? datasets : []).map((d, i) => ({
+            label: d.label,
+            data: d.data,
+            parsing: d.parsing,
+            yAxisID: d.yAxisID,
+            // { xAxisKey: 'x', 
+            //    yAxisKey: d.kind === 'hr' ? 'hr' : 'y' },
+            borderColor: palette[i % palette.length],
+            backgroundColor: palette[i % palette.length],
+            pointRadius: 0,
+            borderWidth: 2,
+            tension: 0.2,
+        }));
+
+        if (chart) {
+            chart.destroy();
+        }
+
+        chart = new Chart(chartEl, {
+            type: 'line',
+            data: { datasets: normalized },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'nearest',
+                    intersect: false,
+                },
+                scales: {
+                    x: { type: 'time', time: { unit: 'day' } },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                    },
+                    hr: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                    },
+                },
             },
-        },
+        });
+    }
+
+    rangeEl.addEventListener('change', function () {
+        syncFilterInputs();
+        if (rangeEl.value !== 'custom') {
+            loadChart();
+        }
     });
+
+    filtersEl.addEventListener('submit', function (evt) {
+        evt.preventDefault();
+        loadChart();
+    });
+
+    resetEl.addEventListener('click', function () {
+        rangeEl.value = '7d';
+        syncFilterInputs();
+        loadChart();
+    });
+
+    syncFilterInputs();
+    await loadChart();
 })();
 </script>
 <?= $this->endSection() ?>

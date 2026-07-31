@@ -192,7 +192,8 @@ class Home extends BaseController
             [$from, $to] = [$to, $from];
         }
 
-        $sql = 'SELECT r.id AS room_id,r.title AS room_title,d.created,d.value FROM t_data d JOIN t_room r ON r.id = d.room WHERE r.home = %d AND d.kind = %s';
+        $timeBucket = 'FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(d.created) / 900) * 900)';
+        $sql = 'SELECT r.id AS room_id,r.title AS room_title,' . $timeBucket . ' AS created,AVG(d.value) AS value FROM t_data d JOIN t_room r ON r.id = d.room WHERE r.home = %d AND d.kind = %s';
         $args = [$id, $db->STRING('temp')];
 
         if ($from !== null) {
@@ -208,8 +209,8 @@ class Home extends BaseController
         if ($fromInput !== '' || $toInput !== '') {
             $limit = 12000;
         }
-        $sql .= ' ORDER BY d.created ASC LIMIT %d';
-        $args[] = $limit;
+        $sql .= ' GROUP BY r.id,r.title,' . $timeBucket . ' ORDER BY created ASC';
+        // $args[] = $limit;
 
         $points = $db->keyedrows($sql, ...$args);
 

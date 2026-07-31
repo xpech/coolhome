@@ -147,26 +147,121 @@ class Room extends BaseController
             return $this->response->setStatusCode(404)->setJSON(['error' => 'not_found']);
         }
 
-        $points = $db->keyedRows(
-            'SELECT created,value FROM t_data WHERE room = %d AND kind = %s ORDER BY created ASC LIMIT 1200',
-            $id,
-            $db->STRING('temp')
-        );
+        $range = (string) ($this->request->getGet('range') ?? '7d');
+        $fromInput = trim((string) ($this->request->getGet('from') ?? ''));
+        $toInput = trim((string) ($this->request->getGet('to') ?? ''));
 
+        $from = null;
+        $to = null;
+
+        if ($fromInput !== '' || $toInput !== '') {
+            $from = $this->normalizeDateBoundary($fromInput, true);
+            $to = $this->normalizeDateBoundary($toInput, false);
+        } else {
+            $now = new \DateTimeImmutable('now');
+            if ($range === '24h') {
+                $from = $now->sub(new \DateInterval('PT24H'))->format('Y-m-d H:i:s');
+            } elseif ($range === '7d') {
+                $from = $now->sub(new \DateInterval('P7D'))->format('Y-m-d H:i:s');
+            } elseif ($range === '30d') {
+                $from = $now->sub(new \DateInterval('P30D'))->format('Y-m-d H:i:s');
+            }
+        }
+
+        if ($from !== null && $to !== null && strcmp($from, $to) > 0) {
+            [$from, $to] = [$to, $from];
+        }
+
+        $sql = 'SELECT created,sensor,kind,device,value FROM t_data WHERE room = %d';
+        $args = [$id];
+
+        if ($from !== null) {
+            $sql .= ' AND created >= %s';
+            $args[] = $db->STRING($from);
+        }
+        if ($to !== null) {
+            $sql .= ' AND created <= %s';
+            $args[] = $db->STRING($to);
+        }
+
+        $limit = $range === 'all' ? 12000 : 4000;
+        if ($fromInput !== '' || $toInput !== '') {
+            $limit = 12000;
+        }
+        $sql .= ' ORDER BY device,sensor,kind,created ASC ';
+        // $args[] = $limit;
+
+        $res = $db->query(sprintf($sql, ...$args));
+
+        $datasets = [];
         $series = [];
-        foreach ($points as $p) {
+        $sensor = null;
+        $kind = null;
+        $device = null;
+        $y = 'y';
+        while ($p = $res->getUnbufferedRow('array')) {
+            if ($sensor !== $p['sensor'] || $device !== $p['device'] || $kind !== $p['kind']) {
+                if ($sensor !== null) {
+                    $datasets[] = [
+                        'label' => $sensor . ' (' . $kind . ')',
+                        'data' => $series,
+                        'kind' => $kind,
+                        'yAxisID' => $y,
+                        'parsing' => [
+                            'xAxisKey' => 'x',
+                            'yAxisKey' => $y,
+                        ],
+                    ];  
+                }
+                $sensor = (string) ($p['sensor'] ?? '');
+                $kind = (string) ($p['kind'] ?? '');
+                $device = (string) ($p['device'] ?? '');
+                $series = [];
+            }
+            $y = $kind === 'temp' ? 'y' : 'hr';
             $series[] = [
                 'x' => (string) ($p['created'] ?? ''),
-                'y' => isset($p['value']) ? (float) $p['value'] : null,
+                $y => isset($p['value']) ? (float) $p['value'] : null,
             ];
         }
 
-        return $this->response->setJSON([
-            [
-                'label' => 'Temperature',
+        if ($sensor !== null) {
+            $datasets[] = [
+                'label' => $sensor . ' (' . $kind . ')',
                 'data' => $series,
-            ],
-        ]);
+                'fill' => false,
+                'yAxisID' => $y,
+
+                'kind' => $kind,
+                        'parsing' => [
+                            'xAxisKey' => 'x',
+                            'yAxisKey' => $y,
+                        ],
+            ];
+            }
+
+        return $this->response->setJSON($datasets);
+    }
+
+    private function normalizeDateBoundary(string $input, bool $isStart): ?string
+    {
+        if ($input === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $input) === 1) {
+            return $input . ($isStart ? ' 00:00:00' : ' 23:59:59');
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $input) === 1) {
+            return str_replace('T', ' ', $input) . ':00';
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}(:\d{2})?$/', $input) === 1) {
+            return strlen($input) === 16 ? $input . ':00' : $input;
+        }
+
+        return null;
     }
 
     private function savePrograms(int $roomId, string $action, bool $supportsProgramKind): void
