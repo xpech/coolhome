@@ -13,12 +13,12 @@
         <div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3">
             <div class="field">
                 <label for="title" class="ch-label">Nom de la piece</label>
-                <input id="title" type="text" name="title" value="<?= esc($room['title']) ?>" class="ch-input">
+                <input id="title" type="text" name="title" value="<?= esc($room['title']) ?>" class="ch-input" <?= $isOwner ? '' : 'disabled' ?>>
             </div>
             <?php if (! empty($supportsRoomAppearance)): ?>
                 <div class="field">
                     <label for="icon" class="ch-label">Icone</label>
-                    <select id="icon" name="icon" class="ch-input">
+                    <select id="icon" name="icon" class="ch-input" <?= $isOwner ? '' : 'disabled' ?>>
                         <option value="">-</option>
                         <?php foreach ($iconOptions as $opt): ?>
                             <option value="<?= esc((string) $opt['css']) ?>" <?= ((string) ($room['icon'] ?? '') === (string) $opt['css']) ? 'selected' : '' ?>><?= esc((string) $opt['name']) ?></option>
@@ -27,7 +27,7 @@
                 </div>
                 <div class="field">
                     <label for="color" class="ch-label">Couleur</label>
-                    <select id="color" name="color" class="ch-input">
+                    <select id="color" name="color" class="ch-input" <?= $isOwner ? '' : 'disabled' ?>>
                         <option value="">-</option>
                         <?php foreach ($colorOptions as $opt): ?>
                             <option value="<?= esc((string) $opt['css']) ?>" <?= ((string) ($room['color'] ?? '') === (string) $opt['css']) ? 'selected' : '' ?>><?= esc((string) $opt['name']) ?></option>
@@ -83,7 +83,7 @@
                         <td><?= esc($device['title'] ?: ('Satellite ' . $device['uuid'])) ?></td>
                         <td><?= esc((string) ($device['kind'] ?? '-')) ?></td>
                         <td><?= esc((string) ($device['uuid'] ?? '-')) ?></td>
-                        <td><a href="/device/index/<?= (int) $device['id'] ?>" class="text-blue-600 hover:text-blue-800">Details legacy</a></td>
+                        <td><?php if ($isOwner): ?><a href="/device/index/<?= (int) $device['id'] ?>" class="text-blue-600 hover:text-blue-800">Details</a><?php endif; ?></td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -221,6 +221,7 @@
         </form>
     <?php endif; ?>
 
+    <?php if ($isOwner): ?>
     <form class="ch-card mt-4 border-red-200 bg-red-50/60" method="post">
         <h2 class="mt-0 text-lg font-bold text-red-700">Zone de suppression</h2>
         <p class="mb-3 text-sm text-red-700">Cette action est irreversible et supprimera la piece avec ses programmes.</p>
@@ -232,6 +233,7 @@
             onclick="return confirm('Confirmer la suppression definitive de cette piece ?');"
         >Supprimer cette piece</button>
     </form>
+    <?php endif; ?>
 </div>
 <?= $this->endSection() ?>
 

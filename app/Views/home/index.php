@@ -6,7 +6,6 @@
 
 <?= $this->section('content') ?>
 <div class="mx-auto max-w-[980px]">
-
     <div class="ch-card mb-4">
         <div class="mb-2 text-sm font-semibold text-gray-600">Mode rapide</div>
         <form method="post" class="flex flex-wrap gap-2">
@@ -22,7 +21,7 @@
         <div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3">
             <div class="field">
                 <label for="title" class="ch-label">Nom de la maison</label>
-                <input id="title" type="text" name="title" value="<?= esc($home['title']) ?>" class="ch-input">
+                <input id="title" type="text" name="title" value="<?= esc($home['title']) ?>" class="ch-input" <?= $isOwner ? '' : 'disabled' ?>>
             </div>
             <div class="field">
                 <label for="confort_temp" class="ch-label">Temperature confort</label>
@@ -43,7 +42,7 @@
             <?php if (! empty($supportsLocation)): ?>
                 <div class="field">
                     <label for="location" class="ch-label">Localisation (ville,pays)</label>
-                    <input id="location" type="text" name="location" value="<?= esc((string) ($home['location'] ?? '')) ?>" class="ch-input" placeholder="Paris,France">
+                    <input id="location" type="text" name="location" value="<?= esc((string) ($home['location'] ?? '')) ?>" class="ch-input" placeholder="Paris,France" <?= $isOwner ? '' : 'disabled' ?>>
                 </div>
                 <div class="field">
                     <label class="ch-label">Precipitation</label>
@@ -129,9 +128,21 @@
             </tbody>
         </table>
         </div>
-        <p class="mt-4"><a class="ch-btn ch-btn-primary" href="/home/addroom/<?= (int) $home['id'] ?>">Ajouter une piece</a></p>
+        <?php if ($isOwner): ?><p class="mt-4"><a class="ch-btn ch-btn-primary" href="/home/addroom/<?= (int) $home['id'] ?>">Ajouter une piece</a></p><?php endif; ?>
     </div>
 
+    <div class="ch-card mt-4">
+        <h2 class="mt-0 text-xl font-bold">Partage de la maison</h2>
+        <p class="mb-3 text-sm text-gray-500">Votre role : <?= $isOwner ? 'Owner' : 'Habitant' ?>.</p>
+        <?php if ($isOwner): ?>
+            <p class="mb-3 text-sm text-gray-500">Invitez des personnes a rejoindre cette maison et gerez leurs droits d'acces.</p>
+            <a href="/home/sharing/<?= (int) $home['id'] ?>" class="ch-btn ch-btn-primary">Partager / gerer les membres</a>
+        <?php else: ?>
+            <p class="text-sm text-gray-500">Vous pouvez modifier les modes, les temperatures et les programmes. Le partage est gere par les Owners.</p>
+        <?php endif; ?>
+    </div>
+
+    <?php if ($isOwner): ?>
     <div class="ch-card mt-4 border-red-200 bg-red-50/60">
         <h2 class="mt-0 text-lg font-bold text-red-700">Zone de suppression</h2>
         <p class="mb-3 text-sm text-red-700">Cette action est irreversible et supprimera la maison.</p>
@@ -141,6 +152,7 @@
             onclick="return confirm('Confirmer la suppression definitive de cette maison ?');"
         >Supprimer cette maison</a>
     </div>
+    <?php endif; ?>
 </div>
 <?= $this->endSection() ?>
 

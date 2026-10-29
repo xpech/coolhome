@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\HomeAccess;
+
 class Room extends BaseController
 {
     public function index(int $id)
@@ -15,15 +17,15 @@ class Room extends BaseController
         $supportsRoomAppearance = $this->hasColumn('t_room', 'icon') && $this->hasColumn('t_room', 'color');
         $supportsProgramKind = $this->hasColumn('t_room_program', 'kind');
         $rows = $db->keyedrows(
-            'SELECT r.id,r.home,r.title,r.mode,h.owner,h.title AS home_title,h.confort_temp,h.absence_temp FROM t_room r JOIN t_home h ON h.id = r.home WHERE r.id = %d AND h.owner = %d LIMIT 1',
-            $id,
-            (int) $auth['id']
+            'SELECT r.id,r.home,r.title,r.mode,h.owner,h.title AS home_title,h.confort_temp,h.absence_temp FROM t_room r JOIN t_home h ON h.id = r.home WHERE r.id = %d AND ' . HomeAccess::condition((int) $auth['id']) . ' LIMIT 1',
+            $id
         );
         $room = $rows ? $rows[0] : null;
 
         if (! $room) {
             return redirect()->to('/homes');
         }
+        $isOwner = HomeAccess::role((int) $room['home'], (int) $auth['id']) === HomeAccess::OWNER;
 
         if ($supportsRoomAppearance) {
             $extra = $db->keyedrows('SELECT icon,color FROM t_room WHERE id = %d LIMIT 1', $id);
@@ -37,6 +39,9 @@ class Room extends BaseController
         $action = (string) ($this->request->getPost('action') ?? '');
         if ($this->request->getMethod(true) === 'POST') {
             if ($action === 'DeleteRoom') {
+                if (! $isOwner) {
+                    return $this->response->setStatusCode(403)->setBody('Action reservee aux Owners.');
+                }
                 $db->query('UPDATE t_device SET room = NULL WHERE room = %d', $id);
                 $db->query('DELETE FROM t_room_program WHERE room = %d', $id);
                 $db->query('DELETE FROM t_room WHERE id = %d', $id);
@@ -45,7 +50,13 @@ class Room extends BaseController
             }
 
             if ($action === 'UpdateRoom') {
-                if ($supportsRoomAppearance) {
+                $mode = (int) $this->request->getPost('mode');
+                if (! in_array($mode, [-1, 0, 1], true)) {
+                    return $this->response->setStatusCode(422)->setBody('Mode invalide.');
+                }
+                if (! $isOwner) {
+                    $db->query('UPDATE t_room SET mode = %d WHERE id = %d', $mode, $id);
+                } elseif ($supportsRoomAppearance) {
                     $db->query(
                         'UPDATE t_room SET title = %s, mode = %d, icon = %s, color = %s WHERE id = %d',
                         $db->STRING(trim((string) $this->request->getPost('title'))),
@@ -126,6 +137,7 @@ class Room extends BaseController
             'hasWatering' => $hasWatering,
             'iconOptions' => $supportsRoomAppearance ? $this->loadChoiceList('icons.yml') : [],
             'colorOptions' => $supportsRoomAppearance ? $this->loadChoiceList('colors.yml') : [],
+            'isOwner' => $isOwner,
         ]);
     }
 
@@ -138,9 +150,8 @@ class Room extends BaseController
 
         $db = \App\Class\CDatabase::DB();
         $rows = $db->keyedRows(
-            'SELECT r.id FROM t_room r JOIN t_home h ON h.id = r.home WHERE r.id = %d AND h.owner = %d LIMIT 1',
-            $id,
-            (int) $auth['id']
+            'SELECT r.id FROM t_room r JOIN t_home h ON h.id = r.home WHERE r.id = %d AND ' . HomeAccess::condition((int) $auth['id']) . ' LIMIT 1',
+            $id
         );
 
         if (! $rows) {

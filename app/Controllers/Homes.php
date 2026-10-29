@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\HomeAccess;
+
 class Homes extends BaseController
 {
     public function index()
@@ -21,9 +23,8 @@ class Homes extends BaseController
 
             if ($homeId > 0 && in_array($mode, [-1, 0, 1], true)) {
                 $owned = $db->keyedRows(
-                    'SELECT id FROM t_home WHERE id = %d AND owner = %d LIMIT 1',
-                    $homeId,
-                    $ownerId
+                    'SELECT h.id FROM t_home h WHERE h.id = %d AND ' . HomeAccess::condition($ownerId) . ' LIMIT 1',
+                    $homeId
                 );
 
                 if ($owned) {
@@ -38,17 +39,8 @@ class Homes extends BaseController
             return redirect()->to('/homes');
         }
 
-        if ($supportsLocation) {
-            $homes = $db->keyedrows(
-                'SELECT id,title,mode,confort_temp,absence_temp,location FROM t_home WHERE owner = %d ORDER BY title DESC',
-                $ownerId
-            );
-        } else {
-            $homes = $db->keyedrows(
-                'SELECT id,title,mode,confort_temp,absence_temp FROM t_home WHERE owner = %d ORDER BY title DESC',
-                $ownerId
-            );
-        }
+        $homeQuery = 'SELECT h.* FROM t_home h WHERE ' . HomeAccess::condition($ownerId) . ' ORDER BY h.title DESC';
+        $homes = $db->keyedrows($homeQuery);
 
         if ($homes === []) {
             $db->query(
@@ -60,17 +52,7 @@ class Homes extends BaseController
                 16
             );
 
-            if ($supportsLocation) {
-                $homes = $db->keyedrows(
-                    'SELECT id,title,mode,confort_temp,absence_temp,location FROM t_home WHERE owner = %d ORDER BY title DESC',
-                    $ownerId
-                );
-            } else {
-                $homes = $db->keyedrows(
-                    'SELECT id,title,mode,confort_temp,absence_temp FROM t_home WHERE owner = %d ORDER BY title DESC',
-                    $ownerId
-                );
-            }
+            $homes = $db->keyedrows($homeQuery);
         }
 
         $supportsProgramKind = $this->hasColumn('t_room_program', 'kind');
@@ -78,6 +60,7 @@ class Homes extends BaseController
 
         $precipByLocation = [];
         foreach ($homes as &$home) {
+            $home['role'] = HomeAccess::role((int) $home['id'], $ownerId);
             $home['location'] = (string) ($home['location'] ?? '');
             $home['precipitations'] = null;
             $home['rooms_preview'] = $roomsPreviewByHome[(int) $home['id']] ?? [];
@@ -123,13 +106,23 @@ class Homes extends BaseController
         $db = \App\Class\CDatabase::DB();
 
         $home = $db->keyedrows(
-            'SELECT id FROM t_home WHERE id = %d AND owner = %d LIMIT 1',
-            $id,
-            $ownerId
+            'SELECT h.id FROM t_home h WHERE h.id = %d AND ' . HomeAccess::condition($ownerId, 'h', true) . ' LIMIT 1',
+            $id
         );
 
         if ($home) {
+            $connection = db_connect();
+            $connection->transStart();
+            $db->query('UPDATE t_device SET room = NULL WHERE room IN (SELECT id FROM t_room WHERE home = %d)', $id);
+            $db->query('DELETE FROM t_room_program WHERE room IN (SELECT id FROM t_room WHERE home = %d)', $id);
+            $db->query('DELETE FROM t_room WHERE home = %d', $id);
+            $db->query('DELETE FROM t_home_invitation WHERE home = %d', $id);
+            $db->query('DELETE FROM t_home_member WHERE home = %d', $id);
             $db->query('DELETE FROM t_home WHERE id = %d', (int) $home[0]['id']);
+            $connection->transComplete();
+            if (! $connection->transStatus()) {
+                throw new \RuntimeException('Home deletion failed.');
+            }
         }
 
         return redirect()->to('/homes');

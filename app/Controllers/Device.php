@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\HomeAccess;
+
 class Device extends BaseController
 {
     public function index(int $id)
@@ -13,9 +15,8 @@ class Device extends BaseController
 
         $db = \App\Class\CDatabase::DB();
         $rows = $db->keyedrows(
-            'SELECT id,uuid,title,room,kind,temp,reference,owner FROM t_device WHERE id = %d AND owner = %d LIMIT 1',
-            $id,
-            (int) $auth['id']
+            'SELECT d.id,d.uuid,d.title,d.room,d.kind,d.temp,d.reference,d.owner FROM t_device d WHERE d.id = %d AND ' . HomeAccess::deviceCondition((int) $auth['id']) . ' LIMIT 1',
+            $id
         );
         $device = $rows ? $rows[0] : null;
 
@@ -27,6 +28,12 @@ class Device extends BaseController
             $action = (string) ($this->request->getPost('action') ?? '');
             if ($action === 'UpdateDevice') {
                 $room = (int) $this->request->getPost('room');
+                if ($room > 0 && ! $db->keyedrows(
+                    'SELECT r.id FROM t_room r JOIN t_home h ON h.id = r.home WHERE r.id = %d AND ' . HomeAccess::condition((int) $auth['id'], 'h', true),
+                    $room
+                )) {
+                    return $this->response->setStatusCode(403)->setBody('Cette piece ne vous est pas accessible en tant qu\'Owner.');
+                }
                 $db->query(
                     'UPDATE t_device SET title = %s, kind = %s, reference = %d, room = %s WHERE id = %d',
                     $db->STRING(trim((string) $this->request->getPost('title'))),
@@ -44,8 +51,7 @@ class Device extends BaseController
         }
 
         $homes = $db->keyedrows(
-            'SELECT id,title FROM t_home WHERE owner = %d ORDER BY title ASC',
-            (int) $auth['id']
+            'SELECT h.id,h.title FROM t_home h WHERE ' . HomeAccess::condition((int) $auth['id'], 'h', true) . ' ORDER BY h.title ASC'
         );
 
         $roomsByHome = [];
@@ -76,9 +82,8 @@ class Device extends BaseController
 
         $db = \App\Class\CDatabase::DB();
         $device = $db->keyedrows(
-            'SELECT id FROM t_device WHERE id = %d AND owner = %d LIMIT 1',
-            $id,
-            (int) $auth['id']
+            'SELECT d.id FROM t_device d WHERE d.id = %d AND ' . HomeAccess::deviceCondition((int) $auth['id']) . ' LIMIT 1',
+            $id
         );
 
         if (! $device) {
@@ -144,9 +149,8 @@ class Device extends BaseController
 
         $db = \App\Class\CDatabase::DB();
         $device = $db->keyedrows(
-            'SELECT id FROM t_device WHERE id = %d AND owner = %d LIMIT 1',
-            $id,
-            (int) $auth['id']
+            'SELECT d.id FROM t_device d WHERE d.id = %d AND ' . HomeAccess::deviceCondition((int) $auth['id']) . ' LIMIT 1',
+            $id
         );
 
         if (! $device) {

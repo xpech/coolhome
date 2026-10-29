@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\HomeAccess;
+
 class Devices extends BaseController
 {
     public function index()
@@ -13,8 +15,7 @@ class Devices extends BaseController
 
         $db = \App\Class\CDatabase::DB();
         $devices = $db->keyedrows(
-            'SELECT d.id,d.uuid,d.title,d.room,d.kind,d.reference,d.owner,r.title AS room_title FROM t_device d LEFT JOIN t_room r ON r.id = d.room WHERE d.owner = %d ORDER BY d.title ASC',
-            (int) $auth['id']
+            'SELECT d.id,d.uuid,d.title,d.room,d.kind,d.reference,d.owner,r.title AS room_title FROM t_device d LEFT JOIN t_room r ON r.id = d.room WHERE ' . HomeAccess::deviceCondition((int) $auth['id']) . ' ORDER BY d.title ASC'
         );
 
         foreach ($devices as &$device) {

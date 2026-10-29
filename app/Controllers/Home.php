@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\HomeAccess;
+
 class Home extends BaseController
 {
     public function index(int $id)
@@ -15,15 +17,15 @@ class Home extends BaseController
         $supportsLocation = $this->hasColumn('t_home', 'location');
         $supportsRoomAppearance = $this->hasColumn('t_room', 'icon') && $this->hasColumn('t_room', 'color');
         $rows = $db->keyedrows(
-            'SELECT id,owner,title,mode,confort_temp,absence_temp FROM t_home WHERE id = %d AND owner = %d LIMIT 1',
-            $id,
-            (int) $auth['id']
+            'SELECT h.id,h.owner,h.title,h.mode,h.confort_temp,h.absence_temp FROM t_home h WHERE h.id = %d AND ' . HomeAccess::condition((int) $auth['id']) . ' LIMIT 1',
+            $id
         );
         $home = $rows ? $rows[0] : null;
 
         if (! $home) {
             return redirect()->to('/homes');
         }
+        $isOwner = HomeAccess::role($id, (int) $auth['id']) === HomeAccess::OWNER;
 
         if ($supportsLocation) {
             $locationRow = $db->keyedrows('SELECT location FROM t_home WHERE id = %d LIMIT 1', $id);
@@ -46,7 +48,19 @@ class Home extends BaseController
         }
 
         if ($this->request->getMethod(true) === 'POST' && $this->request->getPost('action') === 'UpdateHome') {
-            if ($supportsLocation) {
+            $mode = (int) $this->request->getPost('mode');
+            if (! in_array($mode, [-1, 0, 1], true)) {
+                return $this->response->setStatusCode(422)->setBody('Mode invalide.');
+            }
+            if (! $isOwner) {
+                $db->query(
+                    'UPDATE t_home SET confort_temp = %f, absence_temp = %f, mode = %d WHERE id = %d',
+                    (float) $this->request->getPost('confort_temp'),
+                    (float) $this->request->getPost('absence_temp'),
+                    $mode,
+                    $id
+                );
+            } elseif ($supportsLocation) {
                 $db->query(
                     'UPDATE t_home SET title = %s, confort_temp = %f, absence_temp = %f, location = %s, mode = %d WHERE id = %d',
                     $db->STRING(trim((string) $this->request->getPost('title'))),
@@ -112,6 +126,7 @@ class Home extends BaseController
             'supportsLocation' => $supportsLocation,
             'precipitations' => $precipitations,
             'supportsRoomAppearance' => $supportsRoomAppearance,
+            'isOwner' => $isOwner,
         ]);
     }
 
@@ -124,9 +139,8 @@ class Home extends BaseController
 
         $db = \App\Class\CDatabase::DB();
         $rows = $db->keyedrows(
-            'SELECT id FROM t_home WHERE id = %d AND owner = %d LIMIT 1',
-            $id,
-            (int) $auth['id']
+            'SELECT h.id FROM t_home h WHERE h.id = %d AND ' . HomeAccess::condition((int) $auth['id'], 'h', true) . ' LIMIT 1',
+            $id
         );
         $home = $rows ? $rows[0] : null;
 
@@ -158,9 +172,8 @@ class Home extends BaseController
 
         $db = \App\Class\CDatabase::DB();
         $homeRows = $db->keyedrows(
-            'SELECT id FROM t_home WHERE id = %d AND owner = %d LIMIT 1',
-            $id,
-            (int) $auth['id']
+            'SELECT h.id FROM t_home h WHERE h.id = %d AND ' . HomeAccess::condition((int) $auth['id']) . ' LIMIT 1',
+            $id
         );
 
         if (! $homeRows) {

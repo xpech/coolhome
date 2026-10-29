@@ -22,6 +22,7 @@
                 <div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                         <div class="font-bold text-lg"><?= esc($home['title']) ?></div>
+                        <div class="text-sm text-gray-500"><?= esc(\App\Libraries\HomeAccess::label($home['role'])) ?></div>
                         <div class="text-sm text-gray-500">Mode: <?= esc(\App\Controllers\Homes::modeLabel((int) $home['mode'])) ?></div>
                     </div>
                     <form method="post" class="flex flex-wrap gap-1.5 sm:justify-end">

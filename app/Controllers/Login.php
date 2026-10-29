@@ -2,7 +2,7 @@
 
 namespace App\Controllers;
 
-use PHPMailer\PHPMailer\PHPMailer;
+use App\Libraries\Mailer;
 use App\Class\CDatabase;
 
 class Login extends BaseController
@@ -141,7 +141,6 @@ class Login extends BaseController
 
     private function tryAuthenticate(string $login, string $password): bool
     {
-        log_message('debug', 'Login tryAuthenticate '.$login.' / '.$password);
         if ($login === '' || $password === '') {
             return false;
         }
@@ -167,6 +166,7 @@ class Login extends BaseController
         }
 
         unset($user['password']);
+        $this->session->regenerate(true);
         $this->session->set('user', $user);
 
         return true;
@@ -205,101 +205,25 @@ class Login extends BaseController
 
     private function sendAccountCreationMail(string $email): bool
     {
-        $config = $this->loadLegacyMailConfig();
-        if ($config === []) {
-            return false;
-        }
-
-        $mail = new PHPMailer(true);
-        $mail->isSMTP();
-        $mail->CharSet = 'UTF-8';
-        $mail->Host = (string) ($config['host'] ?? 'localhost');
-        $mail->Port = (int) ($config['port'] ?? 587);
-        $mail->SMTPAuth = true;
-        $mail->Username = (string) ($config['username'] ?? '');
-        $mail->Password = (string) ($config['password'] ?? '');
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-
-        $from = (string) ($config['from'] ?? $mail->Username);
-        $fromName = (string) ($config['from_name'] ?? 'CoolHome');
-
-        $mail->setFrom($from, $fromName);
-        $mail->addAddress($email);
-        $mail->Subject = '[CoolHome] Lien de creation de compte';
-        $mail->Body = sprintf(
-            "Bonjour,\nVeuillez cliquer sur le lien suivant pour creer votre compte :\n%s\nL'equipe CoolHome",
-            site_url('login/setPassword/' . rawurlencode($email) . '/' . $this->emailKey($email)),
+        return (new Mailer())->send(
+            $email,
+            '[CoolHome] Lien de creation de compte',
+            sprintf(
+                "Bonjour,\nVeuillez cliquer sur le lien suivant pour creer votre compte :\n%s\nL'equipe CoolHome",
+                site_url('login/setPassword/' . rawurlencode($email) . '/' . $this->emailKey($email))
+            )
         );
-
-        try {
-            return $mail->send();
-        } catch (\Throwable $e) {
-            log_message('error', 'Login create mail error: {message}', ['message' => $e->getMessage()]);
-            return false;
-        }
     }
 
     private function sendPasswordRecoverMail(string $email): bool
     {
-        $config = $this->loadLegacyMailConfig();
-        if ($config === []) {
-            return false;
-        }
-
-        $mail = new PHPMailer(true);
-        $mail->isSMTP();
-        $mail->CharSet = 'UTF-8';
-        $mail->Host = (string) ($config['host'] ?? 'localhost');
-        $mail->Port = (int) ($config['port'] ?? 587);
-        $mail->SMTPAuth = true;
-        $mail->Username = (string) ($config['username'] ?? '');
-        $mail->Password = (string) ($config['password'] ?? '');
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-
-        $from = (string) ($config['from'] ?? $mail->Username);
-        $fromName = (string) ($config['from_name'] ?? 'CoolHome');
-
-        $mail->setFrom($from, $fromName);
-        $mail->addAddress($email);
-        $mail->Subject = '[CoolHome] Reinitialisation du mot de passe';
-        $mail->Body = sprintf(
-            "Bonjour,\nVeuillez cliquer sur le lien suivant pour definir un nouveau mot de passe :\n%s\nL'equipe CoolHome",
-            site_url('login/setPassword/' . rawurlencode($email) . '/' . $this->emailKey($email)),
+        return (new Mailer())->send(
+            $email,
+            '[CoolHome] Reinitialisation du mot de passe',
+            sprintf(
+                "Bonjour,\nVeuillez cliquer sur le lien suivant pour definir un nouveau mot de passe :\n%s\nL'equipe CoolHome",
+                site_url('login/setPassword/' . rawurlencode($email) . '/' . $this->emailKey($email))
+            )
         );
-
-        try {
-            return $mail->send();
-        } catch (\Throwable $e) {
-            log_message('error', 'Login recover mail error: {message}', ['message' => $e->getMessage()]);
-            return false;
-        }
-    }
-
-    private function loadLegacyMailConfig(): array
-    {
-        $path = ROOTPATH . 'application/config/mail.yml';
-        if (! is_file($path)) {
-            return [];
-        }
-
-        $result = [];
-        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
-        foreach ($lines as $line) {
-            if (str_starts_with(trim($line), '#')) {
-                continue;
-            }
-            $parts = explode(':', $line, 2);
-            if (count($parts) !== 2) {
-                continue;
-            }
-            $key = trim($parts[0]);
-            $value = trim($parts[1]);
-            if ($key === '') {
-                continue;
-            }
-            $result[$key] = trim($value, " \t\n\r\0\x0B\"'");
-        }
-
-        return $result;
     }
 }

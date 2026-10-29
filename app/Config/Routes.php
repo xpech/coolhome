@@ -20,6 +20,8 @@ $routes->get('homes/remove/(:num)', 'Homes::remove/$1');
 $routes->match(['GET', 'POST'], 'home/index/(:num)', 'Home::index/$1');
 $routes->get('home/addroom/(:num)', 'Home::addroom/$1');
 $routes->get('home/datachart/(:num)', 'Home::datachart/$1');
+$routes->match(['GET', 'POST'], 'home/sharing/(:num)', 'Sharing::index/$1', ['filter' => 'csrf']);
+$routes->match(['GET', 'POST'], 'invitation/(:segment)', 'Sharing::invitation/$1', ['filter' => 'csrf']);
 $routes->match(['GET', 'POST'], 'room/index/(:num)', 'Room::index/$1');
 $routes->get('room/datachart/(:num)', 'Room::datachart/$1');
 
