@@ -1,0 +1,354 @@
+<?= $this->extend('templates/default') ?>
+
+<?= $this->section('title') ?>Piece<?= $this->endSection() ?>
+
+<?= $this->section('breadcrumb') ?><a href="/home/index/<?= (int) $room['home'] ?>" class="ch-backlink">← Retour a la maison</a><?= $this->endSection() ?>
+
+<?= $this->section('content') ?>
+<div class="mx-auto max-w-[1060px]">
+
+    <form class="ch-card mb-4" method="post">
+        <h2 class="text-xl font-bold mt-0">Informations generales</h2>
+        <p class="text-gray-500 mb-4">Maison: <?= esc($room['home_title']) ?></p>
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3">
+            <div class="field">
+                <label for="title" class="ch-label">Nom de la piece</label>
+                <input id="title" type="text" name="title" value="<?= esc($room['title']) ?>" class="ch-input" <?= $isOwner ? '' : 'disabled' ?>>
+            </div>
+            <?php if (! empty($supportsRoomAppearance)): ?>
+                <div class="field">
+                    <label for="icon" class="ch-label">Icone</label>
+                    <select id="icon" name="icon" class="ch-input" <?= $isOwner ? '' : 'disabled' ?>>
+                        <option value="">-</option>
+                        <?php foreach ($iconOptions as $opt): ?>
+                            <option value="<?= esc((string) $opt['css']) ?>" <?= ((string) ($room['icon'] ?? '') === (string) $opt['css']) ? 'selected' : '' ?>><?= esc((string) $opt['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="color" class="ch-label">Couleur</label>
+                    <select id="color" name="color" class="ch-input" <?= $isOwner ? '' : 'disabled' ?>>
+                        <option value="">-</option>
+                        <?php foreach ($colorOptions as $opt): ?>
+                            <option value="<?= esc((string) $opt['css']) ?>" <?= ((string) ($room['color'] ?? '') === (string) $opt['css']) ? 'selected' : '' ?>><?= esc((string) $opt['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            <?php endif; ?>
+            <div class="field">
+                <label for="mode" class="ch-label">Mode</label>
+                <select id="mode" name="mode" class="ch-input">
+                    <?php foreach ([-1 => 'Absent', 0 => 'Automatique', 1 => 'Confort'] as $k => $v): ?>
+                        <option value="<?= $k ?>" <?= (int) $room['mode'] === $k ? 'selected' : '' ?>><?= esc($v) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+        <p class="mt-3">
+            <span class="inline-block mr-3 p-2 rounded-lg bg-blue-50">Temperature: <?= $temp === null ? '-' : esc(number_format((float) $temp, 1)) . '°' ?></span>
+            <span class="inline-block p-2 rounded-lg bg-blue-50">Consigne: <?= $target === null ? '-' : esc(number_format((float) $target, 1)) . '°' ?></span>
+        </p>
+        <div class="mt-4 flex gap-2.5">
+            <button class="ch-btn ch-btn-primary" name="action" value="UpdateRoom">Enregistrer</button>
+        </div>
+    </form>
+
+    <div class="ch-card mb-4">
+        <h2 class="text-xl font-bold mt-0">Vue graphique</h2>
+        <p class="mb-3 text-sm text-gray-500">Evolution de la temperature de la piece.</p>
+        <form id="room-chart-filters" class="mb-3 grid gap-2 sm:grid-cols-[180px,1fr,1fr,auto,auto]">
+            <select id="room-chart-range" class="ch-input">
+                <option value="24h">Dernieres 24h</option>
+                <option value="7d" selected>Derniers 7 jours</option>
+                <option value="30d">Derniers 30 jours</option>
+                <option value="all">Tout l'historique</option>
+                <option value="custom">Personnalise</option>
+            </select>
+            <input id="room-chart-from" type="date" class="ch-input" disabled>
+            <input id="room-chart-to" type="date" class="ch-input" disabled>
+            <button type="submit" class="ch-btn ch-btn-primary">Appliquer</button>
+            <button id="room-chart-reset" type="button" class="ch-btn ch-btn-neutral">Reset</button>
+        </form>
+        <canvas id="room-chart" height="110"></canvas>
+    </div>
+
+    <div class="ch-card mb-4">
+        <h2 class="text-xl font-bold mt-0">Capteurs et actionneurs</h2>
+        <div class="ch-table-wrap">
+        <table class="ch-table">
+            <thead><tr><th>Nom</th><th>Type</th><th>UUID</th><th></th></tr></thead>
+            <tbody>
+                <?php foreach ($devices as $device): ?>
+                    <tr>
+                        <td><?= esc($device['title'] ?: ('Satellite ' . $device['uuid'])) ?></td>
+                        <td><?= esc((string) ($device['kind'] ?? '-')) ?></td>
+                        <td><?= esc((string) ($device['uuid'] ?? '-')) ?></td>
+                        <td><?php if ($isOwner): ?><a href="/device/index/<?= (int) $device['id'] ?>" class="text-blue-600 hover:text-blue-800">Details</a><?php endif; ?></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    <?php if (! empty($supportsProgramKind)): ?>
+        <?php
+            $programsByKind = ['HEATER' => [], 'FAN' => [], 'WATERING' => []];
+            foreach ($programs as $p) {
+                $k = (string) ($p['kind'] ?? 'HEATER');
+                if (! isset($programsByKind[$k])) {
+                    $programsByKind[$k] = [];
+                }
+                $programsByKind[$k][] = $p;
+            }
+        ?>
+        <form class="ch-card" method="post">
+            <h2 class="text-xl font-bold mt-0">Programmes</h2>
+
+            <?php if (! empty($hasHeater)): ?>
+                <h3 class="mb-2 mt-4 text-lg font-semibold">Chauffage</h3>
+                <div class="ch-table-wrap">
+                <table class="ch-table">
+                    <thead><tr><th>Heure</th><th>Lun</th><th>Mar</th><th>Mer</th><th>Jeu</th><th>Ven</th><th>Sam</th><th>Dim</th><th>T°</th><th></th></tr></thead>
+                    <tbody>
+                        <?php foreach ($programsByKind['HEATER'] as $p): ?>
+                            <tr>
+                                <td><input class="ch-input min-w-28" type="time" name="p_start[<?= (int) $p['id'] ?>]" value="<?= esc(substr((string) $p['start'], 0, 5)) ?>"></td>
+                                <?php for ($d = 1; $d <= 7; $d++): ?><td><input type="checkbox" name="p_weekday[<?= (int) $p['id'] ?>][]" value="<?= $d ?>" <?= (((int) $p['weekday']) & (2 << $d)) ? 'checked' : '' ?>></td><?php endfor; ?>
+                                <td><input class="ch-input min-w-24" type="number" step="0.1" name="p_temp[<?= (int) $p['id'] ?>]" value="<?= esc((string) $p['temp']) ?>"></td>
+                                <td><button type="button" onclick="this.closest('tr').remove();" class="text-red-600 hover:text-red-800">Suppr.</button></td>
+                                <input type="hidden" name="p_kind[<?= (int) $p['id'] ?>]" value="HEATER">
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td><input class="ch-input min-w-28" type="time" name="new_start"></td>
+                            <?php for ($d = 1; $d <= 7; $d++): ?><td><input type="checkbox" name="new_weekday[]" value="<?= $d ?>"></td><?php endfor; ?>
+                            <td><input class="ch-input min-w-24" type="number" step="0.1" name="new_temp"></td>
+                            <td><button class="ch-btn ch-btn-primary" type="submit" name="action" value="AddProgramHeater">+</button></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                </div>
+            <?php endif; ?>
+
+            <?php if (! empty($hasFan)): ?>
+                <h3 class="mb-2 mt-6 text-lg font-semibold">Ventilation</h3>
+                <div class="ch-table-wrap">
+                <table class="ch-table">
+                    <thead><tr><th>Heure</th><th>Lun</th><th>Mar</th><th>Mer</th><th>Jeu</th><th>Ven</th><th>Sam</th><th>Dim</th><th>Hr max</th><th></th></tr></thead>
+                    <tbody>
+                        <?php foreach ($programsByKind['FAN'] as $p): ?>
+                            <tr>
+                                <td><input class="ch-input min-w-28" type="time" name="p_start[<?= (int) $p['id'] ?>]" value="<?= esc(substr((string) $p['start'], 0, 5)) ?>"></td>
+                                <?php for ($d = 1; $d <= 7; $d++): ?><td><input type="checkbox" name="p_weekday[<?= (int) $p['id'] ?>][]" value="<?= $d ?>" <?= (((int) $p['weekday']) & (2 << $d)) ? 'checked' : '' ?>></td><?php endfor; ?>
+                                <td><input class="ch-input min-w-24" type="number" step="0.1" name="p_temp[<?= (int) $p['id'] ?>]" value="<?= esc((string) $p['temp']) ?>"></td>
+                                <td><button type="button" onclick="this.closest('tr').remove();" class="text-red-600 hover:text-red-800">Suppr.</button></td>
+                                <input type="hidden" name="p_kind[<?= (int) $p['id'] ?>]" value="FAN">
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td><input class="ch-input min-w-28" type="time" name="newfan_start"></td>
+                            <?php for ($d = 1; $d <= 7; $d++): ?><td><input type="checkbox" name="newfan_weekday[]" value="<?= $d ?>"></td><?php endfor; ?>
+                            <td><input class="ch-input min-w-24" type="number" step="0.1" name="newfan_temp"></td>
+                            <td><button class="ch-btn ch-btn-primary" type="submit" name="action" value="AddProgramFan">+</button></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                </div>
+            <?php endif; ?>
+
+            <?php if (! empty($hasWatering)): ?>
+                <h3 class="mb-2 mt-6 text-lg font-semibold">Arrosage</h3>
+                <div class="ch-table-wrap">
+                <table class="ch-table">
+                    <thead><tr><th>Heure</th><th>Lun</th><th>Mar</th><th>Mer</th><th>Jeu</th><th>Ven</th><th>Sam</th><th>Dim</th><th>Duree (min)</th><th></th></tr></thead>
+                    <tbody>
+                        <?php foreach ($programsByKind['WATERING'] as $p): ?>
+                            <tr>
+                                <td><input class="ch-input min-w-28" type="time" name="p_start[<?= (int) $p['id'] ?>]" value="<?= esc(substr((string) $p['start'], 0, 5)) ?>"></td>
+                                <?php for ($d = 1; $d <= 7; $d++): ?><td><input type="checkbox" name="p_weekday[<?= (int) $p['id'] ?>][]" value="<?= $d ?>" <?= (((int) $p['weekday']) & (2 << $d)) ? 'checked' : '' ?>></td><?php endfor; ?>
+                                <td><input class="ch-input min-w-24" type="number" step="0.1" name="p_temp[<?= (int) $p['id'] ?>]" value="<?= esc((string) $p['temp']) ?>"></td>
+                                <td><button type="button" onclick="this.closest('tr').remove();" class="text-red-600 hover:text-red-800">Suppr.</button></td>
+                                <input type="hidden" name="p_kind[<?= (int) $p['id'] ?>]" value="WATERING">
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td><input class="ch-input min-w-28" type="time" name="new_watering_start"></td>
+                            <?php for ($d = 1; $d <= 7; $d++): ?><td><input type="checkbox" name="new_watering_weekday[]" value="<?= $d ?>"></td><?php endfor; ?>
+                            <td><input class="ch-input min-w-24" type="number" step="0.1" name="new_watering_temp"></td>
+                            <td><button class="ch-btn ch-btn-primary" type="submit" name="action" value="AddProgramWatering">+</button></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                </div>
+            <?php endif; ?>
+
+            <p class="mt-4"><button class="ch-btn ch-btn-primary" type="submit" name="action" value="UpdateProgram">Enregistrer les programmes</button></p>
+        </form>
+    <?php else: ?>
+        <form class="ch-card" method="post">
+            <h2 class="text-xl font-bold mt-0">Programmes</h2>
+            <div class="ch-table-wrap">
+            <table class="ch-table">
+                <thead><tr><th>Heure</th><th>Lun</th><th>Mar</th><th>Mer</th><th>Jeu</th><th>Ven</th><th>Sam</th><th>Dim</th><th>T°</th><th></th></tr></thead>
+                <tbody>
+                    <?php foreach ($programs as $p): ?>
+                        <tr>
+                            <td><input class="ch-input min-w-28" type="time" name="p_start[<?= (int) $p['id'] ?>]" value="<?= esc(substr((string) $p['start'], 0, 5)) ?>"></td>
+                            <?php for ($d = 1; $d <= 7; $d++): ?><td><input type="checkbox" name="p_weekday[<?= (int) $p['id'] ?>][]" value="<?= $d ?>" <?= (((int) $p['weekday']) & (2 << $d)) ? 'checked' : '' ?>></td><?php endfor; ?>
+                            <td><input class="ch-input min-w-24" type="number" step="0.1" name="p_temp[<?= (int) $p['id'] ?>]" value="<?= esc((string) $p['temp']) ?>"></td>
+                            <td><button type="button" onclick="this.closest('tr').remove();" class="text-red-600 hover:text-red-800">Suppr.</button></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td><input class="ch-input min-w-28" type="time" name="new_start"></td>
+                        <?php for ($d = 1; $d <= 7; $d++): ?><td><input type="checkbox" name="new_weekday[]" value="<?= $d ?>"></td><?php endfor; ?>
+                        <td><input class="ch-input min-w-24" type="number" step="0.1" name="new_temp"></td>
+                        <td><button class="ch-btn ch-btn-primary" type="submit" name="action" value="AddProgram">+</button></td>
+                    </tr>
+                </tfoot>
+            </table>
+            </div>
+            <p class="mt-4"><button class="ch-btn ch-btn-primary" type="submit" name="action" value="UpdateProgram">Enregistrer les programmes</button></p>
+        </form>
+    <?php endif; ?>
+
+    <?php if ($isOwner): ?>
+    <form class="ch-card mt-4 border-red-200 bg-red-50/60" method="post">
+        <h2 class="mt-0 text-lg font-bold text-red-700">Zone de suppression</h2>
+        <p class="mb-3 text-sm text-red-700">Cette action est irreversible et supprimera la piece avec ses programmes.</p>
+        <button
+            class="ch-btn ch-btn-danger"
+            type="submit"
+            name="action"
+            value="DeleteRoom"
+            onclick="return confirm('Confirmer la suppression definitive de cette piece ?');"
+        >Supprimer cette piece</button>
+    </form>
+    <?php endif; ?>
+</div>
+<?= $this->endSection() ?>
+
+<?= $this->section('scripts') ?>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+<script>
+(async function () {
+    const chartEl = document.getElementById('room-chart');
+    if (!chartEl) {
+        return;
+    }
+
+    const rangeEl = document.getElementById('room-chart-range');
+    const fromEl = document.getElementById('room-chart-from');
+    const toEl = document.getElementById('room-chart-to');
+    const filtersEl = document.getElementById('room-chart-filters');
+    const resetEl = document.getElementById('room-chart-reset');
+
+    const palette = ['#0d9488', '#2563eb', '#b45309', '#be185d', '#7c3aed', '#16a34a'];
+    let chart = null;
+
+    function syncFilterInputs() {
+        const custom = rangeEl.value === 'custom';
+        fromEl.disabled = !custom;
+        toEl.disabled = !custom;
+        if (!custom) {
+            fromEl.value = '';
+            toEl.value = '';
+        }
+    }
+
+    async function loadChart() {
+        const url = new URL('/room/datachart/<?= (int) $room['id'] ?>', window.location.origin);
+
+        if (rangeEl.value === 'custom') {
+            if (fromEl.value) {
+                url.searchParams.set('from', fromEl.value);
+            }
+            if (toEl.value) {
+                url.searchParams.set('to', toEl.value);
+            }
+            if (!fromEl.value && !toEl.value) {
+                url.searchParams.set('range', '7d');
+            }
+        } else {
+            url.searchParams.set('range', rangeEl.value);
+        }
+
+        const res = await fetch(url.toString());
+        const datasets = await res.json();
+        const normalized = (Array.isArray(datasets) ? datasets : []).map((d, i) => ({
+            label: d.label,
+            data: d.data,
+            parsing: d.parsing,
+            yAxisID: d.yAxisID,
+            // { xAxisKey: 'x', 
+            //    yAxisKey: d.kind === 'hr' ? 'hr' : 'y' },
+            borderColor: palette[i % palette.length],
+            backgroundColor: palette[i % palette.length],
+            pointRadius: 0,
+            borderWidth: 2,
+            tension: 0.2,
+        }));
+
+        if (chart) {
+            chart.destroy();
+        }
+
+        chart = new Chart(chartEl, {
+            type: 'line',
+            data: { datasets: normalized },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'nearest',
+                    intersect: false,
+                },
+                scales: {
+                    x: { type: 'time', time: { unit: 'day' } },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                    },
+                    hr: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                    },
+                },
+            },
+        });
+    }
+
+    rangeEl.addEventListener('change', function () {
+        syncFilterInputs();
+        if (rangeEl.value !== 'custom') {
+            loadChart();
+        }
+    });
+
+    filtersEl.addEventListener('submit', function (evt) {
+        evt.preventDefault();
+        loadChart();
+    });
+
+    resetEl.addEventListener('click', function () {
+        rangeEl.value = '7d';
+        syncFilterInputs();
+        loadChart();
+    });
+
+    syncFilterInputs();
+    await loadChart();
+})();
+</script>
+<?= $this->endSection() ?>
